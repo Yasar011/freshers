@@ -15,3 +15,6 @@ service-account*.json
 # Real student data — never commit to the public repo
 data/
 .claude/
+
+.vercel
+.env*
