@@ -1,0 +1,26 @@
+rules_version = '2';
+
+// Student photos. Storage rules cannot read the Realtime Database, so the
+// Main Admin is identified here by verified Google email (same account that
+// claims /admin in the Realtime Database).
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isMainAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() == 'yasar.h@nift.ac.in';
+    }
+
+    match /students/{fileName} {
+      allow read: if request.auth != null && request.auth.token.email_verified == true;
+      allow delete: if isMainAdmin();
+      allow create, update: if isMainAdmin()
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

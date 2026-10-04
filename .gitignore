@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+.env*.local
+.vercel
+*.log
+firebase-debug*.log
+database-debug.log
+.firebase
+next-env.d.ts
+*.tsbuildinfo
+*adminsdk*.json
+service-account*.json
+
+# Real student data — never commit to the public repo
+data/
+.claude/
