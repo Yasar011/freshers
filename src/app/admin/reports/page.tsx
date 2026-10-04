@@ -47,7 +47,7 @@ export default function ReportsPage() {
       <PageHeader title="Reports & Export" subtitle="Download results as CSV or Excel. Exports are recorded in the audit log." />
       {complete < results.length && (
         <Alert className="mb-4">
-          {results.length - complete} of {results.length} students do not yet have complete evaluations for all days — they are exported with status <b>INCOMPLETE</b> and no final score.
+          {results.length - complete} of {results.length} students have not yet been scored by every evaluator on every day. Their scores count only the marks received so far (status <b>Partial</b> in the export).
         </Alert>
       )}
 
@@ -62,7 +62,7 @@ export default function ReportsPage() {
               <FileText className="size-4" /> CSV
             </Button>
             <Badge tone="green" className="ml-auto self-center">
-              {complete} complete
+              {complete} fully evaluated
             </Badge>
           </div>
         </Card>

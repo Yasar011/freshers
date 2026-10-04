@@ -51,7 +51,7 @@ export default function LeaderboardPage() {
     <div>
       <PageHeader
         title="Leaderboard"
-        subtitle={view === "final" ? `Final = Day 1 + Day 2 + Day 3 (out of ${totalDays * 100}). Only students with every evaluation on every day are ranked.` : `${dayLabel(view)} weightage out of 100 (raw /${rawMax}).`}
+        subtitle={view === "final" ? `Final = Day 1 + Day 2 + Day 3 (out of ${totalDays * 100}). Each day counts the marks received out of /${rawMax}, so a student scored by fewer evaluators gets fewer marks.` : `${dayLabel(view)} weightage out of 100 (marks received out of /${rawMax}).`}
         actions={
           <Button variant="secondary" onClick={() => window.print()}>
             <Printer className="size-4" /> Print
@@ -75,7 +75,7 @@ export default function LeaderboardPage() {
       <Card>
         <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3 text-sm text-slate-600">
           <Trophy className="size-4 text-amber-500" />
-          <b className="tabular">{completeCount}</b> ranked · <b className="tabular">{rows.length - completeCount}</b> incomplete
+          <b className="tabular">{completeCount}</b> students ranked
           {klass && <Badge tone="violet">{klass}</Badge>}
         </div>
         {rows.length === 0 ? (
@@ -127,11 +127,16 @@ export default function LeaderboardPage() {
                       <>
                         {days.map((d) => (
                           <td key={d} className="tabular px-3 py-2.5 text-right">
-                            {r.days[d].score100 !== null ? fmt(r.days[d].score100) : <span className="text-xs font-semibold text-amber-600">INCOMPLETE</span>}
+                            {fmt(r.days[d].score100)}
+                            {!r.days[d].complete && (
+                              <span className="ml-1 text-[11px] font-normal text-slate-400">
+                                ({r.days[d].completedCount}/{r.days[d].requiredCount})
+                              </span>
+                            )}
                           </td>
                         ))}
                         <td className="tabular px-3 py-2.5 text-right text-base font-extrabold">
-                          {r.final !== null ? fmt(r.final) : <Badge tone="amber">INCOMPLETE</Badge>}
+                          {fmt(r.final)}
                         </td>
                         <td className="tabular px-5 py-2.5 text-right text-slate-600">{r.percentage !== null ? `${fmt(r.percentage)}%` : ""}</td>
                       </>
@@ -140,9 +145,9 @@ export default function LeaderboardPage() {
                         <td className="tabular px-3 py-2.5 text-right text-slate-500">
                           {r.days[view].completedCount}/{r.days[view].requiredCount}
                         </td>
-                        <td className="tabular px-3 py-2.5 text-right">{r.days[view].completedCount ? r.days[view].rawTotal : "—"}</td>
+                        <td className="tabular px-3 py-2.5 text-right">{r.days[view].rawTotal}</td>
                         <td className="tabular px-5 py-2.5 text-right text-base font-extrabold">
-                          {r.days[view].score100 !== null ? fmt(r.days[view].score100) : <Badge tone="amber">INCOMPLETE</Badge>}
+                          {fmt(r.days[view].score100)}
                         </td>
                       </>
                     )}

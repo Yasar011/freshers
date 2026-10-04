@@ -41,19 +41,32 @@ describe("scoring", () => {
     expect(r.complete).toBe(true);
   });
 
-  it("never treats a missing evaluation as zero", () => {
+  it("scores partial evaluations out of the full 400 (fewer evaluators → fewer marks)", () => {
     const totals: (number | null)[] = [...SPEC_TOTALS];
-    totals[6] = null; // Evaluator 07 pending
+    totals[6] = null; // Evaluator 07 pending (35 missing)
     const r = computeStudentDay("S1", panelOf(evaluators), dayWith("S1", totals), DEFAULT_SETTINGS);
     expect(r.complete).toBe(false);
-    expect(r.score100).toBeNull();
     expect(r.completedCount).toBe(9);
+    expect(r.rawTotal).toBe(311);
+    expect(r.rawMax).toBe(400);
+    expect(r.score100).toBe(77.75);
     expect(r.entries[6].evaluation).toBeNull();
   });
 
-  it("does not compute from a single evaluator", () => {
+  it("5 of 10 evaluators totalling 29 → 29/400 = 7.25/100", () => {
+    const r = computeStudentDay("S1", panelOf(evaluators), dayWith("S1", [5, 6, 6, 6, 6]), DEFAULT_SETTINGS);
+    expect(r.rawTotal).toBe(29);
+    expect(r.score100).toBe(7.25);
+  });
+
+  it("a single evaluator's full marks are still only 40/400", () => {
     const r = computeStudentDay("S1", panelOf(evaluators), dayWith("S1", [40]), DEFAULT_SETTINGS);
-    expect(r.score100).toBeNull();
+    expect(r.score100).toBe(10);
+  });
+
+  it("no evaluations → 0", () => {
+    const r = computeStudentDay("S1", panelOf(evaluators), {}, DEFAULT_SETTINGS);
+    expect(r.score100).toBe(0);
   });
 
   it("final = sum of three days, percentage over 300 (spec example)", () => {
@@ -72,7 +85,7 @@ describe("scoring", () => {
     expect(r.rank).toBe(1);
   });
 
-  it("marks students with a missing day as INCOMPLETE and leaves them unranked", () => {
+  it("a missing day adds nothing, and everyone is ranked", () => {
     const students: Record<string, Student> = {
       A: { studentId: "A", name: "A" },
       B: { studentId: "B", name: "B" },
@@ -91,10 +104,12 @@ describe("scoring", () => {
     };
     const res = computeFinalResults(students, evaluators, evaluations, DEFAULT_SETTINGS, 3);
     const byKey = Object.fromEntries(res.map((r) => [r.studentKey, r]));
-    expect(byKey.C.final).toBeNull();
+    // A, B: 75 + 75 + 75 = 225. C: 100 + 100 + 0 = 200.
+    expect(byKey.C.final).toBe(200);
     expect(byKey.C.complete).toBe(false);
-    expect(byKey.C.rank).toBeNull();
+    expect(byKey.C.rank).toBe(3);
     // A and B tie → same rank (competition ranking)
+    expect(byKey.A.final).toBe(225);
     expect(byKey.A.rank).toBe(1);
     expect(byKey.B.rank).toBe(1);
     expect(res[res.length - 1].studentKey).toBe("C");

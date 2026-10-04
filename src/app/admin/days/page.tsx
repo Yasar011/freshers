@@ -116,7 +116,7 @@ export default function DaysPage() {
               <p>Evaluators will no longer be able to submit evaluations for {dayLabel(action.day)}.</p>
               {summaries[action.day].pending > 0 && (
                 <Alert tone="red" className="mt-3">
-                  {summaries[action.day].pending.toLocaleString()} evaluation(s) are still pending for this day. Affected students will show as INCOMPLETE until you unlock the day or enter the missing scores.
+                  {summaries[action.day].pending.toLocaleString()} evaluation(s) are still pending for this day. Those students will be scored only on the marks they received (missing evaluations add nothing) unless you unlock the day or enter the missing scores.
                 </Alert>
               )}
             </>

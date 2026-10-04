@@ -255,7 +255,7 @@ export function StudentDayStatus({ studentKey, day, compact }: { studentKey: str
               </td>
               <td colSpan={compact ? 1 : 2} className="px-3 py-2.5 text-right">
                 <span className="text-xs font-semibold uppercase text-slate-500">Daily weightage </span>
-                <span className={cn("tabular font-extrabold", result.complete ? "text-brand-700" : "text-amber-600")}>{result.complete ? `${fmt(result.score100)} / 100` : "INCOMPLETE"}</span>
+                <span className="tabular font-extrabold text-brand-700">{fmt(result.score100)} / 100</span>
               </td>
             </tr>
           </tfoot>

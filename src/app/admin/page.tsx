@@ -34,7 +34,7 @@ export default function Dashboard() {
         )}
         {activeEvaluators < panel.length && (
           <Alert>
-            {panel.length - activeEvaluators} evaluator(s) are deactivated. They cannot sign in, but are still part of the panel — their students stay incomplete until they are reactivated or the admin enters their scores.
+            {panel.length - activeEvaluators} evaluator(s) are deactivated. They cannot sign in, but are still part of the panel — their missing scores add nothing to students' totals until they are reactivated or the admin enters their scores.
           </Alert>
         )}
         {Object.keys(students).length === 0 && (

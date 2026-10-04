@@ -291,7 +291,7 @@ function StudentView({ studentKey: key, onClose, onEdit }: { studentKey: string;
           </div>
           <div className="rounded-2xl bg-brand-50 px-5 py-3 text-right">
             <p className="text-xs font-bold uppercase tracking-wider text-brand-700">Final</p>
-            <p className="tabular text-2xl font-extrabold text-brand-900">{result.final !== null ? `${fmt(result.final)} / ${result.finalMax}` : "INCOMPLETE"}</p>
+            <p className="tabular text-2xl font-extrabold text-brand-900">{fmt(result.final)} / {result.finalMax}</p>
             {result.percentage !== null && <p className="tabular text-sm text-brand-700">{fmt(result.percentage)}%</p>}
           </div>
         </div>

@@ -41,11 +41,16 @@ export interface StudentDayResult {
   orphanEvaluations: { evaluatorKey: string; evaluation: Evaluation }[];
   completedCount: number;
   requiredCount: number;
-  /** Sum of all counted evaluator totals (partial if incomplete). */
+  /** Sum of the totals given by the evaluators who have scored this student so far. */
   rawTotal: number;
   /** requiredCount × perEvaluatorMax (default 10 × 40 = 400). */
   rawMax: number;
-  /** rawTotal / rawMax × 100 — ONLY when complete, else null (never treat missing as zero). */
+  /**
+   * rawTotal / rawMax × 100, always out of the FULL panel (10 × 40 = 400).
+   * A student scored by only some evaluators gets marks only from those evaluators
+   * (e.g. 5 evaluators → at most 200/400 = 50/100): the more evaluators, the more marks.
+   * null only when no evaluators are registered.
+   */
   score100: number | null;
   complete: boolean;
 }
@@ -74,7 +79,7 @@ export function computeStudentDay(
   const rawMax = requiredCount * maxPer;
   const complete = requiredCount > 0 && done.length === requiredCount;
   // Multiply first so 346 × 100 / 400 = 86.5 exactly.
-  const score100 = complete && rawMax > 0 ? round2((rawTotal * 100) / rawMax) : null;
+  const score100 = rawMax > 0 ? round2((rawTotal * 100) / rawMax) : null;
   return {
     studentKey,
     entries,
@@ -168,13 +173,11 @@ export interface FinalResult {
   studentKey: string;
   student: Student;
   days: Record<string, StudentDayResult>;
-  /** Sum of daily /100 scores — only when every day is complete. */
+  /** Sum of daily /100 scores (each day out of the full panel). null only when no evaluators exist. */
   final: number | null;
   finalMax: number;
   percentage: number | null;
   complete: boolean;
-  /** Sum of available daily scores (for display while incomplete). */
-  partial: number;
   rank: number | null;
 }
 
@@ -206,9 +209,8 @@ export function computeFinalResults(
     const perDay: Record<string, StudentDayResult> = {};
     for (const d of days) perDay[d] = computeStudentDay(studentKey, panel, evaluations?.[d], settings);
     const complete = days.every((d) => perDay[d].complete);
-    const partial = round2(days.reduce((s, d) => s + (perDay[d].score100 ?? 0), 0));
     const finalMax = days.length * 100;
-    const final = complete ? partial : null;
+    const final = panel.length ? round2(days.reduce((s, d) => s + (perDay[d].score100 ?? 0), 0)) : null;
     return {
       studentKey,
       student,
@@ -217,7 +219,6 @@ export function computeFinalResults(
       finalMax,
       percentage: final !== null ? round2((final * 100) / finalMax) : null,
       complete,
-      partial,
       rank: null,
     };
   });

@@ -13,9 +13,9 @@ Next.js + Tailwind CSS + **Firebase Realtime Database** + **Firebase Authenticat
 | One day | sum of all evaluators (10 × 40 = **/400**) → **÷ 4 = /100** (e.g. 346/400 → 86.5) |
 | Final | Day 1 + Day 2 + Day 3 = **/300**, percentage = final ÷ 3 |
 
-- A day's score is calculated **only when every evaluator** on the panel has scored that student. Missing evaluations are never treated as zero — the student shows **INCOMPLETE**.
+- A day's score always counts the marks the student actually received, **out of the full panel** (10 × 40 = 400). A student seen by only 5 evaluators can get at most 200/400 = 50/100 — the more evaluators who score them, the more marks they can earn. The "x/10 evaluated" count is shown for information.
 - The panel = every evaluator listed on the Evaluators page (active or deactivated). Deactivating only blocks sign-in; removing an evaluator drops their scores from the calculation (they stay in the database).
-- Both the raw score (/400) and weightage (/100) are always shown and exported.
+- Both the raw score (/400) and weightage (/100) are always shown and exported; the export status is "All evaluations done" or "Partial (x/y evaluations)".
 
 ## Security model (enforced in `database.rules.json`, not just the UI)
 

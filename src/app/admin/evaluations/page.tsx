@@ -22,7 +22,7 @@ export default function EvaluationsPage() {
         {(
           [
             ["lookup", "Student status"],
-            ["pending", "Incomplete students"],
+            ["pending", "Pending evaluations"],
             ["all", "All evaluations"],
           ] as [Tab, string][]
         ).map(([k, l]) => (
@@ -122,7 +122,7 @@ function Incomplete({ day }: { day: string }) {
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
         <p className="text-sm text-slate-600">
-          <b className="tabular">{rows.length}</b> student(s) incomplete for {dayLabel(day)}
+          <b className="tabular">{rows.length}</b> student(s) still waiting for evaluations on {dayLabel(day)}
         </p>
         <Select className="w-auto" value={evaluatorFilter} onChange={(e) => setEvaluatorFilter(e.target.value)}>
           <option value="">Missing from any evaluator</option>

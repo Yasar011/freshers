@@ -31,9 +31,11 @@ export function finalResultsSheet(
     const row: SheetRow = [r.rank ?? "", r.student.studentId, r.student.name, r.student.programme ?? "", r.student.class ?? ""];
     for (const d of days) {
       const dr = r.days[d];
-      row.push(dr.completedCount > 0 ? dr.rawTotal : "", dr.score100 ?? (dr.completedCount > 0 ? "INCOMPLETE" : ""));
+      row.push(dr.rawTotal, dr.score100 ?? "");
     }
-    row.push(r.final ?? "", r.percentage ?? "", r.complete ? "COMPLETE" : "INCOMPLETE");
+    const done = days.reduce((n, d) => n + r.days[d].completedCount, 0);
+    const required = days.reduce((n, d) => n + r.days[d].requiredCount, 0);
+    row.push(r.final ?? "", r.percentage ?? "", r.complete ? "All evaluations done" : `Partial (${done}/${required} evaluations)`);
     rows.push(row);
   }
   return { name: "Final Results", rows };
@@ -70,7 +72,7 @@ export function dailyResultsSheet(results: FinalResult[], day: string): Sheet {
       dr.rawTotal,
       dr.rawMax,
       dr.score100 ?? "",
-      dr.complete ? "COMPLETE" : "INCOMPLETE",
+      dr.complete ? "All evaluations done" : "Partial",
     ]);
   });
   return { name: `${dayLabel(day)} Results`, rows };
