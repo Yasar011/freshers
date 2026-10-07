@@ -4,6 +4,7 @@ import { Trophy, Medal, Printer, Search } from "lucide-react";
 import { useAdminData } from "@/context/AdminDataContext";
 import { Badge, Button, Card, EmptyState, Input, Select, cn } from "@/components/ui";
 import { DayTabs, PageHeader } from "@/components/admin";
+import { FinalistToggle, GenderFilter, matchesGender, type GenderFilterValue } from "@/components/finals/common";
 import { StudentAvatar } from "@/components/shared";
 import { dayLabel } from "@/lib/keys";
 import { assignRanks, computeFinalResults, fmt, type FinalResult } from "@/lib/scoring";
@@ -24,13 +25,14 @@ export default function LeaderboardPage() {
   const [view, setView] = useState("final");
   const [q, setQ] = useState("");
   const [klass, setKlass] = useState("");
+  const [genderFilter, setGenderFilter] = useState<GenderFilterValue>("all");
   const results = useMemo(() => computeFinalResults(students, evaluators, evaluations, settings, totalDays), [students, evaluators, evaluations, settings, totalDays]);
   const classes = useMemo(() => [...new Set(Object.values(students).map((s) => s.class).filter(Boolean))].sort() as string[], [students]);
 
   const rows = useMemo(() => {
     const score = (r: FinalResult) => (view === "final" ? r.final : r.days[view]?.score100 ?? null);
     // Ranks are computed within the current filter (e.g. per class) so "rank within batch" works.
-    let list = results.filter((r) => !klass || r.student.class === klass).map((r) => ({ r, rank: null as number | null }));
+    let list = results.filter((r) => (!klass || r.student.class === klass) && matchesGender(r.student.gender, genderFilter)).map((r) => ({ r, rank: null as number | null }));
     assignRanks(list, (x) => score(x.r), (x, rank) => (x.rank = rank));
     const ql = q.trim().toLowerCase();
     if (ql) list = list.filter(({ r }) => r.student.studentId.toLowerCase().includes(ql) || r.student.name.toLowerCase().includes(ql));
@@ -42,7 +44,7 @@ export default function LeaderboardPage() {
       if (sb !== null) return 1;
       return a.r.student.studentId.localeCompare(b.r.student.studentId, undefined, { numeric: true });
     });
-  }, [results, view, q, klass]);
+  }, [results, view, q, klass, genderFilter]);
 
   const completeCount = rows.filter(({ rank }) => rank !== null).length;
   const rawMax = panel.length * maxPerEvaluator;
@@ -64,6 +66,7 @@ export default function LeaderboardPage() {
           <Search className="absolute left-3 top-2.5 size-5 text-slate-400" />
           <Input className="pl-10" placeholder="Search student…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+        <GenderFilter value={genderFilter} onChange={setGenderFilter} />
         <Select className="w-auto" value={klass} onChange={(e) => setKlass(e.target.value)}>
           <option value="">All classes</option>
           {classes.map((c) => (
@@ -87,6 +90,7 @@ export default function LeaderboardPage() {
                 <tr className="border-b border-slate-100">
                   <th className="px-5 py-2.5">Rank</th>
                   <th className="px-3 py-2.5">Student</th>
+                  <th className="no-print px-2 py-2.5 text-center">Finals</th>
                   {view === "final" ? (
                     <>
                       {days.map((d) => (
@@ -122,6 +126,9 @@ export default function LeaderboardPage() {
                           </p>
                         </div>
                       </div>
+                    </td>
+                    <td className="no-print px-2 py-2.5 text-center">
+                      <FinalistToggle studentKey={r.studentKey} student={r.student} score3day={r.final} compact />
                     </td>
                     {view === "final" ? (
                       <>

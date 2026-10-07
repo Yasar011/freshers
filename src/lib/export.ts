@@ -1,6 +1,7 @@
 import { CRITERIA_KEYS, type Evaluator, type EvaluationsTree, type Settings, type Student } from "./types";
 import { dayKeys, dayLabel, evaluatorDisplayName } from "./keys";
 import { panelOf, perEvaluatorMax, round2, type FinalResult } from "./scoring";
+import { judgeTotal, roundMax, ROUND_KEYS, ROUND_TITLES, type FinalConfig, type FinalScores, type FinalStanding, type Finalist, type JudgePanelMember, type Winners } from "./finals";
 
 export type SheetRow = (string | number | null)[];
 export interface Sheet {
@@ -175,4 +176,80 @@ export async function downloadXlsx(filename: string, sheets: Sheet[]) {
 
 export function fileStamp(): string {
   return formatDateTime(Date.now()).replace(/[: ]/g, "-");
+}
+
+// ───────────────────────── Finals exports ─────────────────────────
+
+export function finalsStandingsSheet(standings: FinalStanding[], config: FinalConfig | null, winners: { boy: Winners; girl: Winners }): Sheet {
+  const header: SheetRow = [
+    "Gender",
+    "Rank",
+    "Contestant #",
+    "Student ID",
+    "Name",
+    "Class",
+    "3-day score",
+    ...ROUND_KEYS.map((r) => `${config?.rounds[r]?.label ?? ROUND_TITLES[r]} /100`),
+    "Final /100",
+    "Status",
+  ];
+  const rows: SheetRow[] = [header];
+  const sorted = [...standings].sort(
+    (a, b) => a.finalist.gender.localeCompare(b.finalist.gender) || Number(b.inQA) - Number(a.inQA) || (a.rank ?? 99) - (b.rank ?? 99) || b.walkTalent - a.walkTalent,
+  );
+  for (const s of sorted) {
+    const w = winners[s.finalist.gender];
+    const status = !s.inQA
+      ? s.finalist.qualified?.talent
+        ? "Out after Talent round"
+        : "Out after Fashion Walk"
+      : w.winner?.key === s.key
+        ? "WINNER"
+        : w.runnerUp?.key === s.key
+          ? "RUNNER-UP"
+          : "Finalist";
+    rows.push([
+      s.finalist.gender === "boy" ? "Boy" : "Girl",
+      s.rank ?? "",
+      s.finalist.number,
+      s.finalist.studentId,
+      s.finalist.name,
+      s.finalist.class ?? "",
+      s.finalist.score3day ?? "",
+      ...ROUND_KEYS.map((r) => (s.rounds[r].done > 0 ? s.rounds[r].score100 : "")),
+      s.inQA ? s.combined : "",
+      status,
+    ]);
+  }
+  return { name: "Finals Standings", rows };
+}
+
+export function finalsDetailedSheet(finalists: Record<string, Finalist>, panel: JudgePanelMember[], scores: FinalScores, config: FinalConfig | null): Sheet {
+  const rows: SheetRow[] = [["Round", "Contestant #", "Student ID", "Name", "Gender", "Judge", "Criteria", "Total", "Max", "Timestamp", "Corrected"]];
+  for (const r of ROUND_KEYS) {
+    const round = config?.rounds[r];
+    if (!round) continue;
+    const crit = Object.entries(round.criteria).sort((a, b) => a[1].order - b[1].order);
+    const list = Object.entries(finalists).sort((a, b) => a[1].number - b[1].number);
+    for (const [key, f] of list) {
+      for (const m of panel) {
+        const sc = scores[r]?.[m.id]?.[key];
+        if (!sc) continue;
+        rows.push([
+          round.label,
+          f.number,
+          f.studentId,
+          f.name,
+          f.gender === "boy" ? "Boy" : "Girl",
+          m.judge.name,
+          crit.map(([k, c]) => `${c.label}: ${sc.scores[k] ?? 0}`).join("; "),
+          judgeTotal(sc),
+          roundMax(round),
+          formatDateTime(sc.timestamp),
+          sc.correction ? `Yes (was ${sc.correction.originalTotal})` : "No",
+        ]);
+      }
+    }
+  }
+  return { name: "Finals Scores", rows };
 }

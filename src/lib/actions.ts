@@ -14,7 +14,7 @@ export interface AdminIdentity {
   email: string;
 }
 
-type Updates = Record<string, unknown>;
+export type Updates = Record<string, unknown>;
 
 interface AuditFields {
   action: string;
@@ -28,7 +28,7 @@ interface AuditFields {
 }
 
 /** Add an audit log entry to a multi-path update so the change and its log are written atomically. */
-function withAudit(updates: Updates, admin: AdminIdentity, fields: AuditFields): Updates {
+export function withAudit(updates: Updates, admin: AdminIdentity, fields: AuditFields): Updates {
   const key = push(ref(db(), "auditLogs")).key!;
   const entry: Record<string, unknown> = {
     adminUid: admin.uid,
@@ -149,9 +149,16 @@ export async function saveStudent(admin: AdminIdentity, student: Student, existi
   const record: Student = { ...toStudentRecord(student) };
   if (student.photoPath) record.photoPath = student.photoPath;
   const value = { ...record, createdAt: existing?.createdAt ?? serverTimestamp(), updatedAt: serverTimestamp() };
+  const updates: Updates = { [`students/${key}`]: value };
+  // Keep the finalist's copy of the name / gender / photo in sync.
+  if (existingKey && (await get(ref(db(), `finalists/${key}`))).exists()) {
+    updates[`finalists/${key}/name`] = student.name;
+    if (student.gender) updates[`finalists/${key}/gender`] = student.gender;
+    updates[`finalists/${key}/photo`] = student.photo ? student.photo : null;
+  }
   await update(
     ref(db()),
-    withAudit({ [`students/${key}`]: value }, admin, {
+    withAudit(updates, admin, {
       action: existingKey ? "student_updated" : "student_added",
       studentId: student.studentId,
       details: `${existingKey ? "Updated" : "Added"} student ${student.studentId} — ${student.name}.`,

@@ -6,6 +6,7 @@ import { dayKeys } from "@/lib/keys";
 import { panelOf, perEvaluatorMax, type PanelMember } from "@/lib/scoring";
 import type { EventInfo, Evaluator, EvaluationsTree, Settings, Student } from "@/lib/types";
 import type { AdminIdentity } from "@/lib/actions";
+import { judgePanel, type FinalConfig, type FinalScores, type Finalist, type Judge, type JudgePanelMember } from "@/lib/finals";
 
 interface AdminData {
   admin: AdminIdentity;
@@ -16,6 +17,12 @@ interface AdminData {
   students: Record<string, Student>;
   evaluators: Record<string, Evaluator>;
   evaluations: EvaluationsTree;
+  /** Finals: null until the admin sets them up. */
+  finalConfig: FinalConfig | null;
+  finalists: Record<string, Finalist>;
+  judges: Record<string, Judge>;
+  judgePanel: JudgePanelMember[];
+  finalScores: FinalScores;
   panel: PanelMember[];
   maxPerEvaluator: number;
   totalDays: number;
@@ -32,6 +39,10 @@ export function AdminDataProvider({ admin, children }: { admin: AdminIdentity; c
   const [students, setStudents] = useState<Record<string, Student> | undefined>(undefined);
   const [evaluators, setEvaluators] = useState<Record<string, Evaluator> | undefined>(undefined);
   const [evaluations, setEvaluations] = useState<EvaluationsTree | undefined>(undefined);
+  const [finalConfig, setFinalConfig] = useState<FinalConfig | null | undefined>(undefined);
+  const [finalists, setFinalists] = useState<Record<string, Finalist> | undefined>(undefined);
+  const [judges, setJudges] = useState<Record<string, Judge> | undefined>(undefined);
+  const [finalScores, setFinalScores] = useState<FinalScores | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,6 +53,10 @@ export function AdminDataProvider({ admin, children }: { admin: AdminIdentity; c
       onValue(ref(db(), "students"), (s) => setStudents(s.val() ?? {}), onErr),
       onValue(ref(db(), "evaluators"), (s) => setEvaluators(s.val() ?? {}), onErr),
       onValue(ref(db(), "evaluations"), (s) => setEvaluations(s.val() ?? {}), onErr),
+      onValue(ref(db(), "finalConfig"), (s) => setFinalConfig(s.val()), onErr),
+      onValue(ref(db(), "finalists"), (s) => setFinalists(s.val() ?? {}), onErr),
+      onValue(ref(db(), "judges"), (s) => setJudges(s.val() ?? {}), onErr),
+      onValue(ref(db(), "finalScores"), (s) => setFinalScores(s.val() ?? {}), onErr),
     ];
     return () => subs.forEach((u) => u());
   }, []);
@@ -50,20 +65,25 @@ export function AdminDataProvider({ admin, children }: { admin: AdminIdentity; c
     const totalDays = event?.totalDays ?? settings?.totalDays ?? 3;
     return {
       admin,
-      loading: [event, settings, students, evaluators, evaluations].some((v) => v === undefined),
+      loading: [event, settings, students, evaluators, evaluations, finalConfig, finalists, judges, finalScores].some((v) => v === undefined),
       error,
       event: event ?? null,
       settings: settings ?? null,
       students: students ?? {},
       evaluators: evaluators ?? {},
       evaluations: evaluations ?? {},
+      finalConfig: finalConfig ?? null,
+      finalists: finalists ?? {},
+      judges: judges ?? {},
+      judgePanel: judgePanel(judges),
+      finalScores: finalScores ?? {},
       panel: panelOf(evaluators),
       maxPerEvaluator: perEvaluatorMax(settings),
       totalDays,
       days: dayKeys(totalDays),
       activeDay: event?.activeDay ?? "day1",
     };
-  }, [admin, event, settings, students, evaluators, evaluations, error]);
+  }, [admin, event, settings, students, evaluators, evaluations, finalConfig, finalists, judges, finalScores, error]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

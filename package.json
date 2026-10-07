@@ -10,7 +10,8 @@
     "test": "vitest run",
     "firebase:setup": "node scripts/setup-firebase.mjs",
     "firebase:verify-rules": "node scripts/verify-rules-live.mjs",
-    "students:csv": "tsx scripts/build-students-csv.ts"
+    "students:csv": "tsx scripts/build-students-csv.ts",
+    "firebase:verify-finals": "tsx scripts/verify-finals-rules.mts"
   },
   "dependencies": {
     "firebase": "^12.19.0",

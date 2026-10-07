@@ -30,9 +30,14 @@ export interface EventInfo {
   days: Record<string, DayInfo>;
 }
 
+export type Gender = "boy" | "girl";
+
 export interface Student {
   studentId: string;
   name: string;
+  gender?: Gender;
+  /** true once the admin has confirmed / set the gender by hand. */
+  genderConfirmed?: boolean;
   programme?: string;
   year?: string;
   semester?: string;

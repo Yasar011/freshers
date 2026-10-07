@@ -136,6 +136,10 @@ export function studentChanged(existing: Student, incoming: Student): boolean {
 /** Plain student record to store (drops parser-only fields). */
 export function toStudentRecord(s: ParsedStudent | Student): Student {
   const out: Student = { studentId: s.studentId, name: s.name };
+  if (s.gender) {
+    out.gender = s.gender;
+    if (s.genderConfirmed) out.genderConfirmed = true;
+  }
   for (const f of ["programme", "year", "semester", "class", "photo"] as const) if (s[f]) out[f] = s[f];
   return out;
 }

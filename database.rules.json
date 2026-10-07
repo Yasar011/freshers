@@ -2,39 +2,66 @@
   "rules": {
     ".read": false,
     ".write": false,
-
     "admin": {
       ".read": "auth != null && data.child('uid').val() === auth.uid",
       ".write": "auth != null && !data.exists() && auth.token.email_verified === true && auth.token.email.toLowerCase() === 'yasar.h@nift.ac.in' && newData.child('uid').val() === auth.uid",
       ".validate": "newData.hasChildren(['uid', 'email', 'role']) && newData.child('role').val() === 'main_admin' && newData.child('email').val() === auth.token.email.toLowerCase()",
-      "uid": { ".validate": "newData.isString()" },
-      "email": { ".validate": "newData.isString()" },
-      "role": { ".validate": "newData.isString()" },
-      "claimedAt": { ".validate": "newData.val() === now" },
-      "$other": { ".validate": false }
+      "uid": {
+        ".validate": "newData.isString()"
+      },
+      "email": {
+        ".validate": "newData.isString()"
+      },
+      "role": {
+        ".validate": "newData.isString()"
+      },
+      "claimedAt": {
+        ".validate": "newData.val() === now"
+      },
+      "$other": {
+        ".validate": false
+      }
     },
-
     "event": {
       ".read": "auth != null && (root.child('admin/uid').val() === auth.uid || (auth.token.email_verified === true && root.child('evaluators').child(auth.token.email.toLowerCase().replace('.', ',')).child('active').val() === true))",
       ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
       ".validate": "newData.hasChildren(['name', 'activeDay', 'totalDays', 'days'])",
-      "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
-      "activeDay": { ".validate": "newData.isString() && newData.parent().child('days').child(newData.val()).exists()" },
-      "totalDays": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 9" },
-      "status": { ".validate": "newData.isString()" },
+      "name": {
+        ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+      },
+      "activeDay": {
+        ".validate": "newData.isString() && newData.parent().child('days').child(newData.val()).exists()"
+      },
+      "totalDays": {
+        ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 9"
+      },
+      "status": {
+        ".validate": "newData.isString()"
+      },
       "days": {
         "$day": {
           ".validate": "$day.matches(/^day[1-9]$/) && newData.hasChildren(['label', 'status'])",
-          "label": { ".validate": "newData.isString()" },
-          "status": { ".validate": "newData.val() === 'open' || newData.val() === 'locked'" },
-          "openedAt": { ".validate": "newData.isNumber()" },
-          "lockedAt": { ".validate": "newData.isNumber()" },
-          "$other": { ".validate": false }
+          "label": {
+            ".validate": "newData.isString()"
+          },
+          "status": {
+            ".validate": "newData.val() === 'open' || newData.val() === 'locked'"
+          },
+          "openedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "lockedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       },
-      "$other": { ".validate": false }
+      "$other": {
+        ".validate": false
+      }
     },
-
     "settings": {
       ".read": "auth != null && (root.child('admin/uid').val() === auth.uid || (auth.token.email_verified === true && root.child('evaluators').child(auth.token.email.toLowerCase().replace('.', ',')).child('active').val() === true))",
       ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
@@ -43,47 +70,97 @@
         ".validate": "newData.hasChildren(['makeup', 'presentation', 'styling', 'dressup'])",
         "$criterion": {
           ".validate": "($criterion === 'makeup' || $criterion === 'presentation' || $criterion === 'styling' || $criterion === 'dressup') && newData.hasChildren(['label', 'max', 'order'])",
-          "label": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40" },
-          "max": { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 100" },
-          "order": { ".validate": "newData.isNumber()" },
-          "$other": { ".validate": false }
+          "label": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
+          },
+          "max": {
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 100"
+          },
+          "order": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       },
-      "evaluatorCount": { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 50" },
-      "totalDays": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 9" },
-      "$other": { ".validate": false }
+      "evaluatorCount": {
+        ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 50"
+      },
+      "totalDays": {
+        ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 9"
+      },
+      "$other": {
+        ".validate": false
+      }
     },
-
     "students": {
       ".read": "auth != null && (root.child('admin/uid').val() === auth.uid || (auth.token.email_verified === true && root.child('evaluators').child(auth.token.email.toLowerCase().replace('.', ',')).child('active').val() === true))",
       ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
       "$studentKey": {
         ".validate": "newData.hasChildren(['studentId', 'name'])",
-        "studentId": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
-        "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200" },
-        "programme": { ".validate": "newData.isString() && newData.val().length <= 60" },
-        "year": { ".validate": "newData.isString() && newData.val().length <= 20" },
-        "semester": { ".validate": "newData.isString() && newData.val().length <= 20" },
-        "class": { ".validate": "newData.isString() && newData.val().length <= 60" },
-        "photo": { ".validate": "newData.isString() && newData.val().length <= 2000" },
-        "photoPath": { ".validate": "newData.isString() && newData.val().length <= 500" },
-        "createdAt": { ".validate": "newData.isNumber()" },
-        "updatedAt": { ".validate": "newData.isNumber()" },
-        "$other": { ".validate": false }
+        "studentId": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+        },
+        "name": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200"
+        },
+        "programme": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "year": {
+          ".validate": "newData.isString() && newData.val().length <= 20"
+        },
+        "semester": {
+          ".validate": "newData.isString() && newData.val().length <= 20"
+        },
+        "class": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "photo": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "photoPath": {
+          ".validate": "newData.isString() && newData.val().length <= 500"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "gender": {
+          ".validate": "newData.val() === 'boy' || newData.val() === 'girl'"
+        },
+        "genderConfirmed": {
+          ".validate": "newData.isBoolean()"
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     },
-
     "evaluators": {
       ".read": "auth != null && root.child('admin/uid').val() === auth.uid",
       ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
       "$evaluatorKey": {
         ".read": "auth != null && auth.token.email_verified === true && auth.token.email.toLowerCase().replace('.', ',') === $evaluatorKey",
         ".validate": "newData.hasChildren(['email', 'name', 'number', 'active']) && newData.child('email').val().toLowerCase().replace('.', ',') === $evaluatorKey",
-        "email": { ".validate": "newData.isString() && newData.val().length <= 200" },
-        "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80" },
-        "number": { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 99" },
-        "active": { ".validate": "newData.isBoolean()" },
-        "createdAt": { ".validate": "newData.isNumber()" },
+        "email": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "name": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80"
+        },
+        "number": {
+          ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 99"
+        },
+        "active": {
+          ".validate": "newData.isBoolean()"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
         "uid": {
           ".write": "auth != null && auth.token.email_verified === true && auth.token.email.toLowerCase().replace('.', ',') === $evaluatorKey && data.parent().exists() && newData.val() === auth.uid",
           ".validate": "newData.isString()"
@@ -92,10 +169,11 @@
           ".write": "auth != null && auth.token.email_verified === true && auth.token.email.toLowerCase().replace('.', ',') === $evaluatorKey && data.parent().exists() && newData.val() === now",
           ".validate": "newData.isNumber()"
         },
-        "$other": { ".validate": false }
+        "$other": {
+          ".validate": false
+        }
       }
     },
-
     "evaluations": {
       ".read": "auth != null && root.child('admin/uid').val() === auth.uid",
       ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
@@ -105,51 +183,331 @@
           "$studentKey": {
             ".write": "auth != null && auth.token.email_verified === true && auth.token.email.toLowerCase().replace('.', ',') === $evaluatorKey && root.child('evaluators').child($evaluatorKey).child('active').val() === true && !data.exists() && newData.exists() && root.child('event/activeDay').val() === $day && root.child('event/days').child($day).child('status').val() === 'open' && root.child('students').child($studentKey).exists() && newData.child('timestamp').val() === now && !newData.child('correction').exists() && !newData.child('enteredByAdmin').exists()",
             ".validate": "$day.matches(/^day[1-9]$/) && root.child('evaluators').child($evaluatorKey).exists() && newData.hasChildren(['makeup', 'presentation', 'styling', 'dressup', 'total', 'timestamp', 'studentId', 'evaluatorName']) && newData.child('studentId').val() === root.child('students').child($studentKey).child('studentId').val() && newData.child('total').val() === newData.child('makeup').val() + newData.child('presentation').val() + newData.child('styling').val() + newData.child('dressup').val()",
-            "makeup": { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= root.child('settings/criteria/makeup/max').val()" },
-            "presentation": { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= root.child('settings/criteria/presentation/max').val()" },
-            "styling": { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= root.child('settings/criteria/styling/max').val()" },
-            "dressup": { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= root.child('settings/criteria/dressup/max').val()" },
-            "total": { ".validate": "newData.isNumber() && newData.val() === newData.parent().child('makeup').val() + newData.parent().child('presentation').val() + newData.parent().child('styling').val() + newData.parent().child('dressup').val()" },
-            "timestamp": { ".validate": "newData.isNumber()" },
-            "studentId": { ".validate": "newData.isString()" },
-            "evaluatorName": { ".validate": "newData.isString() && newData.val().length <= 80" },
-            "evaluatorNumber": { ".validate": "newData.isNumber()" },
-            "evaluatorUid": { ".validate": "newData.isString()" },
-            "enteredByAdmin": { ".validate": "newData.isBoolean()" },
+            "makeup": {
+              ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= root.child('settings/criteria/makeup/max').val()"
+            },
+            "presentation": {
+              ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= root.child('settings/criteria/presentation/max').val()"
+            },
+            "styling": {
+              ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= root.child('settings/criteria/styling/max').val()"
+            },
+            "dressup": {
+              ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= root.child('settings/criteria/dressup/max').val()"
+            },
+            "total": {
+              ".validate": "newData.isNumber() && newData.val() === newData.parent().child('makeup').val() + newData.parent().child('presentation').val() + newData.parent().child('styling').val() + newData.parent().child('dressup').val()"
+            },
+            "timestamp": {
+              ".validate": "newData.isNumber()"
+            },
+            "studentId": {
+              ".validate": "newData.isString()"
+            },
+            "evaluatorName": {
+              ".validate": "newData.isString() && newData.val().length <= 80"
+            },
+            "evaluatorNumber": {
+              ".validate": "newData.isNumber()"
+            },
+            "evaluatorUid": {
+              ".validate": "newData.isString()"
+            },
+            "enteredByAdmin": {
+              ".validate": "newData.isBoolean()"
+            },
             "correction": {
               ".validate": "newData.hasChildren(['originalTotal', 'reason', 'correctedAt', 'count'])",
-              "originalTotal": { ".validate": "newData.isNumber()" },
-              "original": { ".validate": "newData.hasChildren(['makeup', 'presentation', 'styling', 'dressup'])" },
-              "reason": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 500" },
-              "correctedAt": { ".validate": "newData.isNumber()" },
-              "correctedBy": { ".validate": "newData.isString()" },
-              "count": { ".validate": "newData.isNumber()" },
-              "$other": { ".validate": false }
+              "originalTotal": {
+                ".validate": "newData.isNumber()"
+              },
+              "original": {
+                ".validate": "newData.hasChildren(['makeup', 'presentation', 'styling', 'dressup'])"
+              },
+              "reason": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 500"
+              },
+              "correctedAt": {
+                ".validate": "newData.isNumber()"
+              },
+              "correctedBy": {
+                ".validate": "newData.isString()"
+              },
+              "count": {
+                ".validate": "newData.isNumber()"
+              },
+              "$other": {
+                ".validate": false
+              }
             },
-            "$other": { ".validate": false }
+            "$other": {
+              ".validate": false
+            }
           }
         }
       }
     },
-
     "auditLogs": {
       ".read": "auth != null && root.child('admin/uid').val() === auth.uid",
-      ".indexOn": ["timestamp"],
+      ".indexOn": [
+        "timestamp"
+      ],
       "$logId": {
         ".write": "auth != null && root.child('admin/uid').val() === auth.uid && !data.exists()",
         ".validate": "newData.hasChildren(['action', 'adminUid', 'timestamp', 'details']) && newData.child('adminUid').val() === auth.uid && newData.child('timestamp').val() === now",
-        "action": { ".validate": "newData.isString() && newData.val().length <= 60" },
-        "adminUid": { ".validate": "newData.isString()" },
-        "adminEmail": { ".validate": "newData.isString()" },
-        "timestamp": { ".validate": "newData.isNumber()" },
-        "details": { ".validate": "newData.isString() && newData.val().length <= 4000" },
-        "studentId": { ".validate": "newData.isString()" },
-        "evaluator": { ".validate": "newData.isString()" },
-        "day": { ".validate": "newData.isString()" },
-        "reason": { ".validate": "newData.isString() && newData.val().length <= 500" },
-        "before": { ".validate": "newData.isString() && newData.val().length <= 200" },
-        "after": { ".validate": "newData.isString() && newData.val().length <= 200" },
-        "$other": { ".validate": false }
+        "action": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "adminUid": {
+          ".validate": "newData.isString()"
+        },
+        "adminEmail": {
+          ".validate": "newData.isString()"
+        },
+        "timestamp": {
+          ".validate": "newData.isNumber()"
+        },
+        "details": {
+          ".validate": "newData.isString() && newData.val().length <= 4000"
+        },
+        "studentId": {
+          ".validate": "newData.isString()"
+        },
+        "evaluator": {
+          ".validate": "newData.isString()"
+        },
+        "day": {
+          ".validate": "newData.isString()"
+        },
+        "reason": {
+          ".validate": "newData.isString() && newData.val().length <= 500"
+        },
+        "before": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "after": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "finalConfig": {
+      ".read": "auth != null && root.child('admin/uid').val() === auth.uid || (auth != null && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('active').val() === true && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('token').val() === root.child('judgeSessions').child(auth.uid).child('token').val())",
+      ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
+      ".validate": "newData.hasChildren(['activeRound','perGender','rounds'])",
+      "activeRound": {
+        ".validate": "newData.isString() && newData.parent().child('rounds').child(newData.val()).exists()"
+      },
+      "perGender": {
+        ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 50"
+      },
+      "rounds": {
+        "$round": {
+          ".validate": "$round.matches(/^[a-z0-9]{1,20}$/) && newData.hasChildren(['label','order','status','weight','criteria'])",
+          "label": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+          },
+          "order": {
+            ".validate": "newData.isNumber()"
+          },
+          "status": {
+            ".validate": "newData.val() === 'open' || newData.val() === 'locked'"
+          },
+          "weight": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+          },
+          "advanceBoys": {
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 50"
+          },
+          "advanceGirls": {
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 50"
+          },
+          "note": {
+            ".validate": "newData.isString() && newData.val().length <= 200"
+          },
+          "openedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "lockedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "criteria": {
+            "$crit": {
+              ".validate": "$crit.matches(/^c[1-6]$/) && newData.hasChildren(['label','max','order'])",
+              "label": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+              },
+              "max": {
+                ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 100"
+              },
+              "order": {
+                ".validate": "newData.isNumber()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
+      "$other": {
+        ".validate": false
+      }
+    },
+    "finalists": {
+      ".read": "auth != null && root.child('admin/uid').val() === auth.uid || (auth != null && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('active').val() === true && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('token').val() === root.child('judgeSessions').child(auth.uid).child('token').val())",
+      ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
+      "$studentKey": {
+        ".validate": "newData.hasChildren(['studentId','name','gender','number'])",
+        "studentId": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "name": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "gender": {
+          ".validate": "newData.val() === 'boy' || newData.val() === 'girl'"
+        },
+        "number": {
+          ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1"
+        },
+        "programme": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "class": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "photo": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "score3day": {
+          ".validate": "newData.isNumber()"
+        },
+        "selectedAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "qualified": {
+          "$round": {
+            ".validate": "newData.val() === true"
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "judges": {
+      ".read": "auth != null && root.child('admin/uid').val() === auth.uid",
+      ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
+      "$judgeId": {
+        ".read": "auth != null && root.child('judgeSessions').child(auth.uid).child('judgeId').val() === $judgeId",
+        ".validate": "newData.hasChildren(['name','active','token'])",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80"
+        },
+        "active": {
+          ".validate": "newData.isBoolean()"
+        },
+        "token": {
+          ".validate": "newData.isString() && newData.val().length >= 20 && newData.val().length <= 64"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "judgeTokens": {
+      ".read": "auth != null && root.child('admin/uid').val() === auth.uid",
+      ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
+      "$token": {
+        ".read": "auth != null",
+        ".validate": "newData.isString()"
+      }
+    },
+    "judgeSessions": {
+      ".read": "auth != null && root.child('admin/uid').val() === auth.uid",
+      ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid && newData.exists()",
+        ".validate": "newData.hasChildren(['judgeId','token']) && newData.child('judgeId').isString() && newData.child('token').isString() && root.child('judgeTokens').child(newData.child('token').val()).val() === newData.child('judgeId').val() && root.child('judges').child(newData.child('judgeId').val()).child('active').val() === true && root.child('judges').child(newData.child('judgeId').val()).child('token').val() === newData.child('token').val()",
+        "judgeId": {
+          ".validate": "newData.isString()"
+        },
+        "token": {
+          ".validate": "newData.isString()"
+        },
+        "claimedAt": {
+          ".validate": "newData.val() === now"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "finalScores": {
+      ".read": "auth != null && root.child('admin/uid').val() === auth.uid",
+      ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
+      "$round": {
+        "$judgeId": {
+          ".read": "auth != null && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('active').val() === true && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('token').val() === root.child('judgeSessions').child(auth.uid).child('token').val() && root.child('judgeSessions').child(auth.uid).child('judgeId').val() === $judgeId",
+          "$studentKey": {
+            ".write": "auth != null && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('active').val() === true && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('token').val() === root.child('judgeSessions').child(auth.uid).child('token').val() && root.child('judgeSessions').child(auth.uid).child('judgeId').val() === $judgeId && !data.exists() && newData.exists() && root.child('finalConfig/activeRound').val() === $round && root.child('finalConfig/rounds').child($round).child('status').val() === 'open' && root.child('finalists').child($studentKey).exists() && ($round === 'walk' || root.child('finalists').child($studentKey).child('qualified').child($round).val() === true) && newData.child('timestamp').val() === now && !newData.child('correction').exists() && !newData.child('enteredByAdmin').exists() && newData.child('judgeName').val() === root.child('judges').child($judgeId).child('name').val()",
+            ".validate": "root.child('finalConfig/rounds').child($round).exists() && root.child('judges').child($judgeId).exists() && newData.hasChildren(['scores','timestamp','studentId','judgeName']) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c1').exists() || newData.child('scores/c1').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c2').exists() || newData.child('scores/c2').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c3').exists() || newData.child('scores/c3').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c4').exists() || newData.child('scores/c4').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c5').exists() || newData.child('scores/c5').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c6').exists() || newData.child('scores/c6').exists()) && newData.child('studentId').val() === root.child('finalists').child($studentKey).child('studentId').val()",
+            "scores": {
+              "$crit": {
+                ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= root.child('finalConfig/rounds').child($round).child('criteria').child($crit).child('max').val()"
+              }
+            },
+            "timestamp": {
+              ".validate": "newData.isNumber()"
+            },
+            "studentId": {
+              ".validate": "newData.isString()"
+            },
+            "judgeName": {
+              ".validate": "newData.isString() && newData.val().length <= 80"
+            },
+            "enteredByAdmin": {
+              ".validate": "newData.isBoolean()"
+            },
+            "correction": {
+              ".validate": "newData.hasChildren(['originalTotal','reason','correctedAt','count'])",
+              "originalTotal": {
+                ".validate": "newData.isNumber()"
+              },
+              "original": {
+                ".validate": "true"
+              },
+              "reason": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 500"
+              },
+              "correctedAt": {
+                ".validate": "newData.isNumber()"
+              },
+              "correctedBy": {
+                ".validate": "newData.isString()"
+              },
+              "count": {
+                ".validate": "newData.isNumber()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
       }
     }
   }

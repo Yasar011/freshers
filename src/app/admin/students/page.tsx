@@ -1,9 +1,12 @@
 "use client";
 import { useMemo, useRef, useState } from "react";
-import { Plus, Upload, Search, Pencil, Trash2, Eye, FileDown, ImagePlus, X } from "lucide-react";
+import { Plus, Upload, Search, Pencil, Trash2, Eye, FileDown, ImagePlus, X, Wand2 } from "lucide-react";
 import { useAdminData } from "@/context/AdminDataContext";
 import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Field, Input, Modal, Select } from "@/components/ui";
 import { PageHeader, StudentDayStatus } from "@/components/admin";
+import { FinalistToggle, GenderFilter, GenderSwitch, matchesGender, type GenderFilterValue } from "@/components/finals/common";
+import { guessGender } from "@/lib/gender";
+import { applyDetectedGenders } from "@/lib/finalsActions";
 import { StudentAvatar } from "@/components/shared";
 import { useToast } from "@/components/ui/Toast";
 import { deleteStudent, importStudents, saveStudent, uploadStudentPhoto } from "@/lib/actions";
@@ -26,17 +29,48 @@ export default function StudentsPage() {
   const [viewing, setViewing] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [genderFilter, setGenderFilter] = useState<GenderFilterValue>("all");
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [detecting, setDetecting] = useState(false);
   const { admin } = useAdminData();
   const toast = useToast();
+
+  const unknownCount = useMemo(() => Object.values(students).filter((s) => !s.gender).length, [students]);
+  const reviewCount = useMemo(() => Object.values(students).filter((s) => s.gender && s.genderConfirmed === false).length, [students]);
+  const boysCount = useMemo(() => Object.values(students).filter((s) => s.gender === "boy").length, [students]);
+  const girlsCount = useMemo(() => Object.values(students).filter((s) => s.gender === "girl").length, [students]);
+
+  const detect = async () => {
+    setDetecting(true);
+    try {
+      const entries = Object.entries(students)
+        .filter(([, s]) => !s.gender)
+        .map(([key, s]) => ({ key, guess: guessGender(s.name) }))
+        .filter((x): x is { key: string; guess: NonNullable<ReturnType<typeof guessGender>> } => !!x.guess)
+        .map((x) => ({ key: x.key, gender: x.guess.gender, confident: x.guess.confidence === "high" }));
+      if (!entries.length) {
+        toast("Nothing to detect — every student already has a gender.", "info");
+        return;
+      }
+      await applyDetectedGenders(admin, entries);
+      const unsure = entries.filter((e) => !e.confident).length;
+      toast(`Detected ${entries.length} genders from names${unsure ? ` — ${unsure} need your review` : ""}`, unsure ? "warning" : "success");
+      if (unsure) setReviewOpen(true);
+    } catch (e) {
+      toast(errorMessage(e), "error");
+    } finally {
+      setDetecting(false);
+    }
+  };
 
   const classes = useMemo(() => [...new Set(Object.values(students).map((s) => s.class).filter(Boolean))].sort() as string[], [students]);
   const list = useMemo(() => {
     const ql = q.trim().toLowerCase();
     const qn = normalizeStudentId(q);
     return Object.entries(students)
-      .filter(([, s]) => (!klass || s.class === klass) && (!ql || s.studentId.includes(qn) || s.name.toLowerCase().includes(ql)))
+      .filter(([, s]) => (!klass || s.class === klass) && matchesGender(s.gender, genderFilter) && (!ql || s.studentId.includes(qn) || s.name.toLowerCase().includes(ql)))
       .sort((a, b) => a[1].studentId.localeCompare(b[1].studentId, undefined, { numeric: true }));
-  }, [students, q, klass]);
+  }, [students, q, klass, genderFilter]);
   const pageCount = Math.max(1, Math.ceil(list.length / PAGE));
   const shown = list.slice(page * PAGE, page * PAGE + PAGE);
 
@@ -47,9 +81,17 @@ export default function StudentsPage() {
     <div>
       <PageHeader
         title="Students"
-        subtitle={`${Object.keys(students).length} registered`}
+        subtitle={`${Object.keys(students).length} registered · ${boysCount} boys · ${girlsCount} girls${unknownCount ? ` · ${unknownCount} without gender` : ""}`}
         actions={
           <>
+            {reviewCount > 0 && (
+              <Button variant="secondary" onClick={() => setReviewOpen(true)}>
+                Review genders ({reviewCount})
+              </Button>
+            )}
+            <Button variant="secondary" onClick={detect} loading={detecting} disabled={unknownCount === 0}>
+              <Wand2 className="size-4" /> Auto-detect genders{unknownCount ? ` (${unknownCount})` : ""}
+            </Button>
             <Button variant="secondary" onClick={() => setImportOpen(true)}>
               <Upload className="size-4" /> Import CSV / Excel
             </Button>
@@ -66,6 +108,7 @@ export default function StudentsPage() {
             <Search className="absolute left-3 top-2.5 size-5 text-slate-400" />
             <Input className="pl-10" placeholder="Search by ID or name…" value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} />
           </div>
+          <GenderFilter value={genderFilter} onChange={(v) => { setGenderFilter(v); setPage(0); }} showUnknown={unknownCount > 0} />
           <Select className="w-auto" value={klass} onChange={(e) => { setKlass(e.target.value); setPage(0); }}>
             <option value="">All classes</option>
             {classes.map((c) => (
@@ -83,6 +126,7 @@ export default function StudentsPage() {
               <thead className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr className="border-b border-slate-100">
                   <th className="px-4 py-2.5">Student</th>
+                  <th className="px-3 py-2.5">Gender</th>
                   <th className="px-3 py-2.5">Programme</th>
                   <th className="px-3 py-2.5">Year</th>
                   <th className="px-3 py-2.5">Sem</th>
@@ -101,6 +145,9 @@ export default function StudentsPage() {
                           <p className="text-slate-600">{s.name}</p>
                         </div>
                       </button>
+                    </td>
+                    <td className="px-3 py-2">
+                      <GenderSwitch studentKey={key} student={s} />
                     </td>
                     <td className="px-3 py-2">{s.programme}</td>
                     <td className="px-3 py-2">{s.year}</td>
@@ -145,6 +192,7 @@ export default function StudentsPage() {
       {editing && <StudentForm initial={editing.student} existingKey={editing.key} onClose={() => setEditing(null)} />}
       {viewing && students[viewing] && <StudentView studentKey={viewing} onClose={() => setViewing(null)} onEdit={() => { setEditing({ key: viewing, student: students[viewing] }); setViewing(null); }} />}
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
+      {reviewOpen && <GenderReviewModal onClose={() => setReviewOpen(false)} />}
       <ConfirmDialog
         open={!!deleting}
         onClose={() => setDeleting(null)}
@@ -209,6 +257,10 @@ function StudentForm({ initial, existingKey, onClose }: { initial: Student; exis
     setError(null);
     try {
       const clean: Student = { studentId, name: s.name.trim() };
+      if (s.gender) {
+        clean.gender = s.gender;
+        clean.genderConfirmed = true;
+      }
       for (const f of ["programme", "year", "semester", "class", "photo", "photoPath"] as const) if (s[f]?.trim()) clean[f] = s[f]!.trim();
       if (!clean.photo) delete clean.photoPath;
       await saveStudent(admin, clean, existingKey, existingKey ? students[existingKey] : undefined);
@@ -260,6 +312,15 @@ function StudentForm({ initial, existingKey, onClose }: { initial: Student; exis
             {(id) => <Input id={id} value={s.studentId} onChange={(e) => set("studentId", e.target.value.toUpperCase())} disabled={!!existingKey} autoFocus={!existingKey} />}
           </Field>
           <Field label="Name *">{(id) => <Input id={id} value={s.name} onChange={(e) => set("name", e.target.value)} />}</Field>
+          <Field label="Gender">
+            {(id) => (
+              <Select id={id} value={s.gender ?? ""} onChange={(e) => setS((p) => ({ ...p, gender: (e.target.value || undefined) as Student["gender"] }))}>
+                <option value="">Not set</option>
+                <option value="boy">Boy</option>
+                <option value="girl">Girl</option>
+              </Select>
+            )}
+          </Field>
           <Field label="Programme">{(id) => <Input id={id} value={s.programme ?? ""} onChange={(e) => set("programme", e.target.value)} placeholder="BFT / BD" />}</Field>
           <Field label="Class / Section">{(id) => <Input id={id} value={s.class ?? ""} onChange={(e) => set("class", e.target.value)} placeholder="BD Batch-1" />}</Field>
           <Field label="Year">{(id) => <Input id={id} value={s.year ?? ""} onChange={(e) => set("year", e.target.value)} />}</Field>
@@ -282,6 +343,13 @@ function StudentView({ studentKey: key, onClose, onEdit }: { studentKey: string;
   return (
     <Modal open onClose={onClose} title="Student" size="xl" footer={<Button variant="secondary" onClick={onEdit}><Pencil className="size-4" /> Edit</Button>}>
       <div className="space-y-6">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl bg-slate-50 p-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Gender</span>
+            <GenderSwitch studentKey={key} student={s} size="md" />
+          </div>
+          <FinalistToggle studentKey={key} student={s} score3day={result.final} />
+        </div>
         <div className="flex flex-wrap items-center gap-4">
           <StudentAvatar student={s} size={96} className="rounded-2xl" />
           <div className="flex-1 text-sm">
@@ -465,6 +533,39 @@ function ImportModal({ onClose }: { onClose: () => void }) {
           </>
         )}
         {error && <Alert tone="red">{error}</Alert>}
+      </div>
+    </Modal>
+  );
+}
+
+function GenderReviewModal({ onClose }: { onClose: () => void }) {
+  const { students } = useAdminData();
+  const list = useMemo(
+    () => Object.entries(students).filter(([, s]) => s.gender && s.genderConfirmed === false).sort((a, b) => a[1].name.localeCompare(b[1].name)),
+    [students],
+  );
+  return (
+    <Modal open onClose={onClose} title="Review guessed genders" size="lg" footer={<Button onClick={onClose}>Done</Button>}>
+      <div className="space-y-3">
+        <p className="text-sm text-slate-600">These names could not be matched confidently. Tap Boy or Girl to confirm — each one disappears from this list once you do.</p>
+        {list.length === 0 ? (
+          <Alert tone="green">All genders confirmed.</Alert>
+        ) : (
+          <ul className="divide-y divide-slate-100 rounded-xl ring-1 ring-slate-200">
+            {list.map(([k, s]) => (
+              <li key={k} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+                <StudentAvatar student={s} size={32} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">{s.name}</p>
+                  <p className="tabular text-xs text-slate-500">
+                    {s.studentId} · guessed: {s.gender === "boy" ? "Boy" : "Girl"}
+                  </p>
+                </div>
+                <GenderSwitch studentKey={k} student={s} size="md" />
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </Modal>
   );
