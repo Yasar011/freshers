@@ -216,7 +216,6 @@ export function StudentDayStatus({ studentKey, day, compact }: { studentKey: str
                 {!compact && (
                   <td className="px-3 py-2 text-xs text-slate-500">
                     {evaluation ? formatDateTimeShort(evaluation.timestamp) : ""}
-                    {evaluation?.enteredByAdmin && <Badge tone="violet" className="ml-1">by admin</Badge>}
                   </td>
                 )}
                 <td className="no-print px-3 py-1.5 text-right">

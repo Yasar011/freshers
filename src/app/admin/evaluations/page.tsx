@@ -234,7 +234,6 @@ function AllEvaluations({ day }: { day: string }) {
                   <td className="px-3 py-2">
                     {r.memberName}
                     {r.ev.correction && <Badge tone="amber" className="ml-1">corrected</Badge>}
-                    {r.ev.enteredByAdmin && <Badge tone="violet" className="ml-1">by admin</Badge>}
                   </td>
                   {CRITERIA_KEYS.map((k) => (
                     <td key={k} className="tabular px-2 py-2 text-right">

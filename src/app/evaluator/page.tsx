@@ -426,7 +426,6 @@ export default function EvaluatorPage() {
                   Your Score: <span className="font-bold">{existing.total} / {maxTotal}</span>
                 </p>
                 <p className="text-sm text-slate-700">Submitted: {submissions[selectedKey]?.status === "pending" ? "pending sync" : formatTime(existing.timestamp)}</p>
-                {existing.correction && <p className="mt-1 text-xs text-slate-500">Corrected by Main Admin</p>}
                 <p className="mt-3 text-xs text-slate-500">Only the Main Admin can correct a submitted evaluation.</p>
                 <Button size="lg" className="mt-4 w-full" onClick={resetToSearch}>
                   Evaluate next student
