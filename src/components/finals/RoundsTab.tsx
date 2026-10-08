@@ -6,6 +6,7 @@ import { ScoreSelector, StudentAvatar } from "@/components/shared";
 import { useToast } from "@/components/ui/Toast";
 import { GenderBadge, GenderFilter, matchesGender, useFinals, type GenderFilterValue } from "./common";
 import {
+  cidOf,
   GENDERS,
   judgeTotal,
   recommendAdvance,
@@ -42,7 +43,7 @@ export default function RoundsTab() {
       {rounds.map(({ key, info }) => {
         const part = Object.entries(finalists).filter(([, f]) => takesPart(f, key));
         const expected = part.length * judgePanel.length;
-        const doneCount = judgePanel.reduce((n, m) => n + part.filter(([k]) => finalScores[key]?.[m.id]?.[k]).length, 0);
+        const doneCount = judgePanel.reduce((n, m) => n + part.filter(([, f]) => finalScores[key]?.[m.id]?.[cidOf(f)]).length, 0);
         const pct = expected ? (doneCount * 100) / expected : 0;
         const isOpen = info.status === "open";
         const idx = ROUND_KEYS.indexOf(key);
@@ -165,7 +166,7 @@ function RoundScoreboard({ round, filter }: { round: RoundKey; filter: GenderFil
   const rows = useMemo(() => {
     const list = Object.entries(finalists)
       .filter(([, f]) => takesPart(f, round) && matchesGender(f.gender, filter))
-      .map(([key, f]) => ({ key, f, r: roundResult(key, round, judgePanel, finalScores, finalConfig) }));
+      .map(([key, f]) => ({ key, f, r: roundResult(cidOf(f), round, judgePanel, finalScores, finalConfig) }));
     // rank within gender by this round's score
     const rank = new Map<string, number>();
     for (const g of GENDERS) {
@@ -233,7 +234,7 @@ function FinalScoreModal({ round, studentKey, member, onClose }: { round: RoundK
   const { finalists, finalScores, finalConfig, admin } = useFinals();
   const toast = useToast();
   const finalist = finalists[studentKey];
-  const current: FinalScore | null = finalScores[round]?.[member.id]?.[studentKey] ?? null;
+  const current: FinalScore | null = (finalist && finalScores[round]?.[member.id]?.[cidOf(finalist)]) || null;
   const crit = useMemo(() => Object.entries(finalConfig?.rounds[round]?.criteria ?? {}).sort((a, b) => a[1].order - b[1].order), [finalConfig, round]);
   const [scores, setScores] = useState<Record<string, number | null>>({});
   const [reason, setReason] = useState("");
@@ -261,8 +262,8 @@ function FinalScoreModal({ round, studentKey, member, onClose }: { round: RoundK
     setError(null);
     try {
       const final = Object.fromEntries(crit.map(([k]) => [k, scores[k] as number]));
-      if (current) await correctFinalScore(admin, round, finalConfig, member.id, member.judge.name, studentKey, finalist, current, final, reason.trim());
-      else await adminEnterFinalScore(admin, round, finalConfig, member.id, member.judge.name, studentKey, finalist, final, reason.trim());
+      if (current) await correctFinalScore(admin, round, finalConfig, member.id, member.judge.name, finalist, current, final, reason.trim());
+      else await adminEnterFinalScore(admin, round, finalConfig, member.id, member.judge.name, finalist, final, reason.trim());
       toast(current ? `Score corrected: ${judgeTotal(current)} → ${total}` : `Score ${total}/${max} entered`, "success");
       onClose();
     } catch (e) {
@@ -337,7 +338,7 @@ function FinalScoreModal({ round, studentKey, member, onClose }: { round: RoundK
         message={<>The judge will be able to score {finalist.name} again (only while the round is open).</>}
         onConfirm={async (r) => {
           if (!current) return;
-          await resetFinalScore(admin, round, finalConfig, member.id, member.judge.name, studentKey, finalist, current, r);
+          await resetFinalScore(admin, round, finalConfig, member.id, member.judge.name, finalist, current, r);
           toast("Score reset", "success");
           onClose();
         }}
@@ -404,7 +405,7 @@ function QualifiersModal({ from, onClose }: { from: "walk" | "talent"; onClose: 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {rec.map((r) => {
             const group = Object.entries(finalists).filter(([, f]) => f.gender === r.gender && takesPart(f, from));
-            const panel = judgeScoreMap(group, from, judges, finalScores, finalConfig);
+            const panel = judgeScoreMap(finalists, group, from, judges, finalScores, finalConfig);
             const sorted = group.sort((a, b) => (panel.get(b[0]) ?? 0) - (panel.get(a[0]) ?? 0) || (b[1].score3day ?? 0) - (a[1].score3day ?? 0));
             return (
               <div key={r.gender}>
@@ -443,6 +444,7 @@ function QualifiersModal({ from, onClose }: { from: "walk" | "talent"; onClose: 
 }
 
 function judgeScoreMap(
+  finalists: Record<string, Finalist>,
   group: [string, Finalist][],
   from: "walk" | "talent",
   judges: ReturnType<typeof useFinals>["judges"],
@@ -457,7 +459,7 @@ function judgeScoreMap(
     let den = 0;
     for (const r of rounds) {
       const w = Number(config?.rounds[r]?.weight) || 0;
-      num += w * roundResult(k, r, panel, scores, config).score100;
+      num += w * roundResult(cidOf(finalists[k]), r, panel, scores, config).score100;
       den += w;
     }
     out.set(k, den > 0 ? Math.round((num / den) * 100) / 100 : 0);

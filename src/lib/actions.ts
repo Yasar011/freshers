@@ -151,10 +151,16 @@ export async function saveStudent(admin: AdminIdentity, student: Student, existi
   const value = { ...record, createdAt: existing?.createdAt ?? serverTimestamp(), updatedAt: serverTimestamp() };
   const updates: Updates = { [`students/${key}`]: value };
   // Keep the finalist's copy of the name / gender / photo in sync.
-  if (existingKey && (await get(ref(db(), `finalists/${key}`))).exists()) {
-    updates[`finalists/${key}/name`] = student.name;
-    if (student.gender) updates[`finalists/${key}/gender`] = student.gender;
-    updates[`finalists/${key}/photo`] = student.photo ? student.photo : null;
+  if (existingKey) {
+    const fin = await get(ref(db(), `finalists/${key}`));
+    if (fin.exists()) {
+      updates[`finalists/${key}/name`] = student.name;
+      if (student.gender) {
+        updates[`finalists/${key}/gender`] = student.gender;
+        updates[`contestants/n${fin.val().number}/gender`] = student.gender;
+      }
+      updates[`finalists/${key}/photo`] = student.photo ? student.photo : null;
+    }
   }
   await update(
     ref(db()),
@@ -178,6 +184,17 @@ export async function deleteStudent(admin: AdminIdentity, key: string, student: 
         updates[`evaluations/${day}/${ek}/${key}`] = null;
         removed++;
       }
+    }
+  }
+  // A deleted student can't stay in the Finals: drop the finalist, the judge-facing entry and any judge scores.
+  const fin = await get(ref(db(), `finalists/${key}`));
+  if (fin.exists()) {
+    const cid = `n${fin.val().number}`;
+    updates[`finalists/${key}`] = null;
+    updates[`contestants/${cid}`] = null;
+    const sc = (await get(ref(db(), "finalScores"))).val() ?? {};
+    for (const [round, byJudge] of Object.entries(sc as Record<string, Record<string, Record<string, unknown>>>)) {
+      for (const [judgeId, byCid] of Object.entries(byJudge ?? {})) if (byCid?.[cid]) updates[`finalScores/${round}/${judgeId}/${cid}`] = null;
     }
   }
   await update(

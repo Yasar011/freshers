@@ -13,7 +13,7 @@ import { fmt } from "@/lib/scoring";
 import { errorMessage } from "@/lib/firebase";
 
 export default function FinalistsTab() {
-  const { finalistList, counts, perGender, finalConfig, students, finalists, admin } = useFinals();
+  const { finalistList, counts, perGender, finalConfig, students, finalists, finalScores, admin } = useFinals();
   const toast = useToast();
   const [filter, setFilter] = useState<GenderFilterValue>("all");
   const [pickOpen, setPickOpen] = useState(false);
@@ -151,10 +151,10 @@ export default function FinalistsTab() {
         title="Remove from Finals?"
         tone="danger"
         confirmLabel="Remove finalist"
-        message={removing && finalists[removing] ? <>{finalists[removing].name} will be removed. Scores already given to them are kept but no longer counted.</> : null}
+        message={removing && finalists[removing] ? <>{finalists[removing].name} will be removed from the Finals, together with any judge scores they received.</> : null}
         onConfirm={async () => {
           if (!removing) return;
-          await removeFinalist(admin, removing, finalists[removing]);
+          await removeFinalist(admin, removing, finalists[removing], finalScores);
           toast("Removed", "success");
         }}
       />
@@ -163,7 +163,7 @@ export default function FinalistsTab() {
 }
 
 function AutoPickModal({ onClose }: { onClose: () => void }) {
-  const { students, finalists, perGender, admin } = useFinals();
+  const { students, finalists, finalScores, perGender, admin } = useFinals();
   const results = useThreeDayScores();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -176,7 +176,7 @@ function AutoPickModal({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await replaceFinalists(admin, flat, finalists);
+      await replaceFinalists(admin, flat, finalists, finalScores);
       toast(`${flat.length} finalists selected`, "success");
       onClose();
     } catch (e) {
@@ -204,7 +204,7 @@ function AutoPickModal({ onClose }: { onClose: () => void }) {
     >
       <div className="space-y-4">
         <p className="text-sm text-slate-600">Ranked by the 3-day final score (all days, all evaluators). You can still add or remove anyone afterwards.</p>
-        {existing > 0 && <Alert>This replaces the current list of {existing} finalist(s). Finalists who stay keep their contestant number and round progress.</Alert>}
+        {existing > 0 && <Alert>This replaces the current list of {existing} finalist(s). Finalists who stay keep their contestant number and round progress; anyone removed loses their judge scores.</Alert>}
         {withoutGender > 0 && (
           <Alert tone="blue">
             {withoutGender} students without a gender were skipped. Set genders on the Students page (Auto-detect) first for a complete pick.

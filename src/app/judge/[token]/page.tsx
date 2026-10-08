@@ -6,9 +6,9 @@ import { CheckCircle2, ChevronRight, Lock, ShieldAlert, X } from "lucide-react";
 import { auth, db, errorMessage } from "@/lib/firebase";
 import { useConnection } from "@/hooks/useConnection";
 import { submitFinalScore } from "@/lib/finalsActions";
-import { GENDERS, judgeTotal, roundMax, takesPart, type FinalConfig, type FinalScore, type Finalist, type Gender, type Judge } from "@/lib/finals";
+import { GENDERS, judgeTotal, roundMax, takesPart, type Contestant, type FinalConfig, type FinalScore, type Gender, type Judge, type RoundKey } from "@/lib/finals";
 import { Alert, Button, FullPageSpinner, ProgressBar, cn } from "@/components/ui";
-import { ConnectionBadge, OfflineBanner, ScoreSelector, StudentAvatar, formatTime } from "@/components/shared";
+import { ConnectionBadge, OfflineBanner, ScoreSelector, formatTime } from "@/components/shared";
 
 type Gate =
   | { kind: "loading" }
@@ -39,6 +39,20 @@ function Message({ title, children, action }: { title: string; children: React.R
         {action && <div className="mt-6">{action}</div>}
       </div>
     </Shell>
+  );
+}
+
+const genderWord = (g: Gender) => (g === "boy" ? "Boy" : "Girl");
+
+/** Big number badge — judges only ever see the contestant number, never a name or photo. */
+function NumberBadge({ number, gender, size = 64 }: { number: number; gender: Gender; size?: number }) {
+  return (
+    <div
+      className={cn("tabular flex shrink-0 items-center justify-center rounded-2xl font-extrabold", gender === "girl" ? "bg-brand-100 text-brand-800" : "bg-sky-100 text-sky-800")}
+      style={{ width: size, height: size, fontSize: size * 0.5 }}
+    >
+      {number}
+    </div>
   );
 }
 
@@ -107,19 +121,19 @@ function JudgeConsole({ judgeId }: { judgeId: string }) {
   const connection = useConnection();
   const [judge, setJudge] = useState<Judge | null | undefined>(undefined);
   const [config, setConfig] = useState<FinalConfig | null | undefined>(undefined);
-  const [finalists, setFinalists] = useState<Record<string, Finalist> | undefined>(undefined);
+  const [contestants, setContestants] = useState<Record<string, Contestant> | undefined>(undefined);
   const [mine, setMine] = useState<Record<string, FinalScore>>({});
   const [revoked, setRevoked] = useState(false);
   const [tab, setTab] = useState<Gender>("girl");
   const [open, setOpen] = useState<string | null>(null);
-  const [flash, setFlash] = useState<{ name: string; total: number; max: number } | null>(null);
+  const [flash, setFlash] = useState<{ label: string; total: number; max: number } | null>(null);
 
   useEffect(() => {
     const onErr = () => setRevoked(true);
     const subs = [
       onValue(ref(db(), `judges/${judgeId}`), (s) => setJudge(s.val()), onErr),
       onValue(ref(db(), "finalConfig"), (s) => setConfig(s.val()), onErr),
-      onValue(ref(db(), "finalists"), (s) => setFinalists(s.val() ?? {}), onErr),
+      onValue(ref(db(), "contestants"), (s) => setContestants(s.val() ?? {}), onErr),
     ];
     return () => subs.forEach((u) => u());
   }, [judgeId]);
@@ -135,33 +149,34 @@ function JudgeConsole({ judgeId }: { judgeId: string }) {
   const isOpen = roundInfo?.status === "open";
   const max = roundMax(roundInfo);
 
-  const contestants = useMemo(
-    () => Object.entries(finalists ?? {}).filter(([, f]) => (round ? takesPart(f, round) : false)).sort((a, b) => a[1].number - b[1].number),
-    [finalists, round],
+  const inRound = useMemo(
+    () => Object.entries(contestants ?? {}).filter(([, c]) => (round ? takesPart(c, round) : false)).sort((a, b) => a[1].number - b[1].number),
+    [contestants, round],
   );
-  const byGender = useMemo(() => Object.fromEntries(GENDERS.map((g) => [g, contestants.filter(([, f]) => f.gender === g)])) as Record<Gender, [string, Finalist][]>, [contestants]);
-  const done = contestants.filter(([k]) => mine[k]).length;
+  const byGender = useMemo(() => Object.fromEntries(GENDERS.map((g) => [g, inRound.filter(([, c]) => c.gender === g)])) as Record<Gender, [string, Contestant][]>, [inRound]);
+  const done = inRound.filter(([k]) => mine[k]).length;
 
   useEffect(() => {
-    // Open the tab that still has work to do.
     if (byGender.girl.length === 0 && byGender.boy.length > 0) setTab("boy");
     else if (byGender.boy.length === 0 && byGender.girl.length > 0) setTab("girl");
   }, [byGender.boy.length, byGender.girl.length]);
 
-  const onSaved = useCallback((name: string, total: number) => {
-    setOpen(null);
-    setFlash({ name, total, max });
-    setTimeout(() => setFlash(null), 4000);
-  }, [max]);
+  const onSaved = useCallback(
+    (label: string, total: number) => {
+      setOpen(null);
+      setFlash({ label, total, max });
+      setTimeout(() => setFlash(null), 4000);
+    },
+    [max],
+  );
 
-  if (revoked)
-    return <Message title="Link no longer active">Your judging link was switched off or replaced. Please ask the organiser for a new link.</Message>;
-  if (judge === undefined || config === undefined || finalists === undefined) return <FullPageSpinner label={connection === "offline" ? "Waiting for connection…" : "Loading…"} />;
+  if (revoked) return <Message title="Link no longer active">Your judging link was switched off or replaced. Please ask the organiser for a new link.</Message>;
+  if (judge === undefined || config === undefined || contestants === undefined) return <FullPageSpinner label={connection === "offline" ? "Waiting for connection…" : "Loading…"} />;
   if (!judge) return <Message title="Link no longer active">Your judging link was removed. Please contact the organiser.</Message>;
   if (!config) return <Message title="Finals not ready">The organiser has not set up the finals yet. This page will update automatically.</Message>;
 
   const list = byGender[tab];
-  const openFinalist = open ? finalists[open] : undefined;
+  const openContestant = open ? contestants[open] : undefined;
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-xl flex-col bg-[#f6f7fb]">
@@ -186,16 +201,16 @@ function JudgeConsole({ judgeId }: { judgeId: string }) {
           )}
         </div>
         {roundInfo?.note && <p className="mt-2 rounded-lg bg-white/10 px-3 py-1.5 text-xs text-brand-100">{roundInfo.note}</p>}
-        {contestants.length > 0 && (
+        {inRound.length > 0 && (
           <div className="mt-3">
             <div className="mb-1 flex justify-between text-xs font-medium text-brand-100">
               <span>Scored</span>
               <span className="tabular">
-                {done} / {contestants.length}
+                {done} / {inRound.length}
               </span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-white/15">
-              <div className="h-full rounded-full bg-emerald-400 transition-[width]" style={{ width: `${(done * 100) / contestants.length}%` }} />
+              <div className="h-full rounded-full bg-emerald-400 transition-[width]" style={{ width: `${(done * 100) / inRound.length}%` }} />
             </div>
           </div>
         )}
@@ -221,7 +236,7 @@ function JudgeConsole({ judgeId }: { judgeId: string }) {
           <div className="flex items-center gap-3 rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-200" role="status">
             <CheckCircle2 className="size-6 shrink-0 text-emerald-600" />
             <p className="text-sm text-emerald-900">
-              <b>✓ Saved</b> — {flash.name}: <span className="tabular font-bold">{flash.total} / {flash.max}</span>
+              <b>✓ Saved</b> — {flash.label}: <span className="tabular font-bold">{flash.total} / {flash.max}</span>
             </p>
           </div>
         )}
@@ -230,22 +245,19 @@ function JudgeConsole({ judgeId }: { judgeId: string }) {
             You can view your scores. This screen updates automatically when the organiser opens the round.
           </Alert>
         )}
-        {contestants.length === 0 && <Alert tone="blue">No contestants in this round yet.</Alert>}
-        {list.map(([key, f]) => {
-          const sc = mine[key];
+        {inRound.length === 0 && <Alert tone="blue">No contestants in this round yet.</Alert>}
+        {list.map(([cid, c]) => {
+          const sc = mine[cid];
           return (
             <button
-              key={key}
-              onClick={() => setOpen(key)}
-              className="flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-200 active:bg-slate-50"
+              key={cid}
+              onClick={() => setOpen(cid)}
+              className="flex w-full items-center gap-4 rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-200 active:bg-slate-50"
             >
-              <div className="relative">
-                <StudentAvatar student={f} size={60} className="rounded-xl" />
-                <span className="tabular absolute -left-1.5 -top-1.5 flex size-7 items-center justify-center rounded-full bg-slate-900 text-xs font-extrabold text-white ring-2 ring-white">{f.number}</span>
-              </div>
+              <NumberBadge number={c.number} gender={c.gender} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-base font-bold text-slate-900">{f.name}</p>
-                <p className="tabular text-xs text-slate-500">{f.studentId}</p>
+                <p className="text-lg font-bold text-slate-900">Contestant {c.number}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{genderWord(c.gender)}</p>
               </div>
               {sc ? (
                 <span className="tabular flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-sm font-bold text-emerald-700">
@@ -263,10 +275,10 @@ function JudgeConsole({ judgeId }: { judgeId: string }) {
         })}
       </main>
 
-      {open && openFinalist && round && roundInfo && (
+      {open && openContestant && round && roundInfo && (
         <ScoreSheet
-          studentKey={open}
-          finalist={openFinalist}
+          cid={open}
+          contestant={openContestant}
           round={round}
           config={config}
           judgeId={judgeId}
@@ -282,8 +294,8 @@ function JudgeConsole({ judgeId }: { judgeId: string }) {
 }
 
 function ScoreSheet({
-  studentKey,
-  finalist,
+  cid,
+  contestant,
   round,
   config,
   judgeId,
@@ -293,16 +305,16 @@ function ScoreSheet({
   onClose,
   onSaved,
 }: {
-  studentKey: string;
-  finalist: Finalist;
-  round: NonNullable<FinalConfig["activeRound"]>;
+  cid: string;
+  contestant: Contestant;
+  round: RoundKey;
   config: FinalConfig;
   judgeId: string;
   judgeName: string;
   existing: FinalScore | null;
   isOpen: boolean;
   onClose: () => void;
-  onSaved: (name: string, total: number) => void;
+  onSaved: (label: string, total: number) => void;
 }) {
   const info = config.rounds[round];
   const crit = useMemo(() => Object.entries(info.criteria).sort((a, b) => a[1].order - b[1].order), [info.criteria]);
@@ -313,6 +325,7 @@ function ScoreSheet({
   const max = roundMax(info);
   const total = crit.reduce((s, [k]) => s + (scores[k] ?? 0), 0);
   const complete = crit.every(([k]) => scores[k] !== null);
+  const label = `Contestant ${contestant.number}`;
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -326,8 +339,8 @@ function ScoreSheet({
     setError(null);
     try {
       const final = Object.fromEntries(crit.map(([k]) => [k, scores[k] as number]));
-      await submitFinalScore(round, judgeId, studentKey, finalist, judgeName, final);
-      onSaved(finalist.name, total);
+      await submitFinalScore(round, judgeId, cid, judgeName, final);
+      onSaved(label, total);
     } catch (e) {
       const msg = errorMessage(e);
       setError(/permission/i.test(msg) ? "The server rejected this score — the round may have just been locked, or it was already scored." : msg);
@@ -339,13 +352,11 @@ function ScoreSheet({
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-[#f6f7fb]">
       <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
-        <StudentAvatar student={finalist} size={52} className="rounded-xl" />
+        <NumberBadge number={contestant.number} gender={contestant.gender} size={52} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-lg font-extrabold leading-tight">
-            <span className="tabular text-slate-400">#{finalist.number}</span> {finalist.name}
-          </p>
-          <p className="tabular text-xs text-slate-500">
-            {finalist.studentId} · {finalist.gender === "boy" ? "Boy" : "Girl"} · {info.label}
+          <p className="truncate text-lg font-extrabold leading-tight">{label}</p>
+          <p className="text-xs text-slate-500">
+            {genderWord(contestant.gender)} · {info.label}
           </p>
         </div>
         <button onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close">
@@ -393,7 +404,7 @@ function ScoreSheet({
             {confirm ? (
               <div className="space-y-2">
                 <p className="text-center text-sm font-semibold text-slate-700">
-                  Submit <span className="tabular text-lg font-extrabold text-slate-900">{total} / {max}</span> for {finalist.name}? You can&apos;t change it afterwards.
+                  Submit <span className="tabular text-lg font-extrabold text-slate-900">{total} / {max}</span> for {label}? You can&apos;t change it afterwards.
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <Button size="lg" variant="secondary" onClick={() => setConfirm(false)} disabled={busy}>

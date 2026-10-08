@@ -5,7 +5,7 @@ import { Alert, Badge, Button, Card, CardHeader, ConfirmDialog, EmptyState, Fiel
 import { useToast } from "@/components/ui/Toast";
 import { useFinals } from "./common";
 import { createJudge, judgeLink, regenerateJudgeLink, removeJudge, renameJudge, setJudgeActive } from "@/lib/finalsActions";
-import { takesPart, type JudgePanelMember } from "@/lib/finals";
+import { cidOf, takesPart, type JudgePanelMember } from "@/lib/finals";
 import { errorMessage } from "@/lib/firebase";
 
 export default function JudgesTab() {
@@ -18,7 +18,7 @@ export default function JudgesTab() {
 
   const round = finalConfig?.activeRound;
   const participants = useMemo(
-    () => (round ? Object.entries(finalists).filter(([, f]) => takesPart(f, round)).map(([k]) => k) : []),
+    () => (round ? Object.values(finalists).filter((f) => takesPart(f, round)).map((f) => cidOf(f)) : []),
     [round, finalists],
   );
 
@@ -39,7 +39,7 @@ export default function JudgesTab() {
   return (
     <div className="space-y-4">
       <Alert tone="blue">
-        Create one link per judge (2–4 judges). The judge opens the link on their phone — <b>no Google login needed</b> — and sees only the finalists. Each link is personal: scores are saved under that judge&apos;s name. Every judge listed here is expected to score every contestant, so remove links you don&apos;t need.
+        Create one link per judge (2–4 judges). The judge opens the link on their phone — <b>no Google login needed</b> — and sees only contestant numbers (Girl / Boy), never names, IDs or photos. Each link is personal: scores are saved under that judge&apos;s name. Every judge listed here is expected to score every contestant, so remove links you don&apos;t need.
       </Alert>
       <Card>
         <CardHeader

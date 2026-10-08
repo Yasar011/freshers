@@ -14,6 +14,12 @@ import {
 import { guessGender } from "@/lib/gender";
 
 const config = defaultFinalConfig();
+/** Maps a finalist's key in the test data to its contestant id (scores are stored by "n<number>"). */
+let REGISTRY: Record<string, Finalist> = {};
+const reg = <T extends Record<string, Finalist>>(f: T): T => {
+  REGISTRY = f;
+  return f;
+};
 const judges: Record<string, Judge> = {
   j1: { name: "Judge A", active: true, token: "x" },
   j2: { name: "Judge B", active: true, token: "y" },
@@ -24,13 +30,14 @@ function fin(number: number, gender: Gender, extra: Partial<Finalist> = {}): Fin
 }
 
 /** Give every judge the same score `perCrit` for each criterion of the round. */
-function addScore(scores: FinalScores, round: "walk" | "talent" | "qa", studentKey: string, perCrit: number, onlyJudge?: string) {
+function addScore(scores: FinalScores, round: "walk" | "talent" | "qa", finalistKey: string, perCrit: number, onlyJudge?: string) {
+  const cid = "n" + REGISTRY[finalistKey].number;
   const crit = Object.keys(config.rounds[round].criteria);
   scores[round] ??= {};
   for (const j of Object.keys(judges)) {
     if (onlyJudge && j !== onlyJudge) continue;
     scores[round]![j] ??= {};
-    scores[round]![j][studentKey] = { scores: Object.fromEntries(crit.map((c) => [c, perCrit])), timestamp: 1, studentId: studentKey, judgeName: j };
+    scores[round]![j][cid] = { scores: Object.fromEntries(crit.map((c) => [c, perCrit])), timestamp: 1, judgeName: j };
   }
 }
 
@@ -41,7 +48,7 @@ describe("finals scoring", () => {
   });
 
   it("round score is out of the whole judge panel", () => {
-    const finalists = { A: fin(1, "girl") };
+    const finalists = reg({ A: fin(1, "girl") });
     const scores: FinalScores = {};
     addScore(scores, "walk", "A", 8); // both judges: 24/30 each → 48/60 = 80
     const [s] = computeStandings(finalists, judges, scores, config);
@@ -52,7 +59,7 @@ describe("finals scoring", () => {
   });
 
   it("a judge who has not scored yet adds nothing (fewer judges → fewer marks)", () => {
-    const finalists = { A: fin(1, "girl") };
+    const finalists = reg({ A: fin(1, "girl") });
     const scores: FinalScores = {};
     addScore(scores, "walk", "A", 10, "j1"); // only j1: 30/60
     const [s] = computeStandings(finalists, judges, scores, config);
@@ -61,12 +68,12 @@ describe("finals scoring", () => {
   });
 
   it("combined score averages the three rounds (equal weights) and ranks within gender", () => {
-    const finalists = {
+    const finalists = reg({
       B1: fin(1, "boy", { qualified: { talent: true, qa: true } }),
       B2: fin(2, "boy", { qualified: { talent: true, qa: true } }),
       G1: fin(3, "girl", { qualified: { talent: true, qa: true } }),
       G2: fin(4, "girl", { qualified: { talent: true, qa: true } }),
-    };
+    });
     const scores: FinalScores = {};
     for (const r of ["walk", "talent", "qa"] as const) {
       addScore(scores, r, "B1", 9);
@@ -91,7 +98,7 @@ describe("finals scoring", () => {
   });
 
   it("only Q&A finalists can win; others are unranked", () => {
-    const finalists = { A: fin(1, "boy"), B: fin(2, "boy", { qualified: { talent: true, qa: true } }) };
+    const finalists = reg({ A: fin(1, "boy"), B: fin(2, "boy", { qualified: { talent: true, qa: true } }) });
     const scores: FinalScores = {};
     addScore(scores, "walk", "A", 10);
     addScore(scores, "walk", "B", 5);
@@ -101,10 +108,10 @@ describe("finals scoring", () => {
   });
 
   it("breaks ties by Q&A score, then 3-day score, and flags a true tie", () => {
-    const finalists = {
+    const finalists = reg({
       A: fin(1, "boy", { qualified: { talent: true, qa: true }, score3day: 80 }),
       B: fin(2, "boy", { qualified: { talent: true, qa: true }, score3day: 90 }),
-    };
+    });
     const scores: FinalScores = {};
     // Same combined average (8), different Q&A: A walk 10 talent 8 qa 6 ; B walk 6 talent 8 qa 10
     addScore(scores, "walk", "A", 10);
@@ -133,7 +140,7 @@ describe("finals scoring", () => {
   });
 
   it("recommends the top 3 boys and top 3 girls to advance", () => {
-    const finalists: Record<string, Finalist> = {};
+    const finalists: Record<string, Finalist> = reg({});
     const scores: FinalScores = {};
     for (let i = 1; i <= 6; i++) {
       finalists[`B${i}`] = fin(i, "boy", { score3day: 50 + i });
@@ -152,12 +159,12 @@ describe("finals scoring", () => {
   });
 
   it("flags a tie at the cut when the 3rd and 4th are level", () => {
-    const finalists: Record<string, Finalist> = {
+    const finalists: Record<string, Finalist> = reg({
       B1: fin(1, "boy", { score3day: 70 }),
       B2: fin(2, "boy", { score3day: 70 }),
       B3: fin(3, "boy", { score3day: 70 }),
       B4: fin(4, "boy", { score3day: 70 }),
-    };
+    });
     const scores: FinalScores = {};
     for (const k of Object.keys(finalists)) addScore(scores, "walk", k, 7);
     const rec = recommendAdvance("walk", finalists, judges, scores, config).find((r) => r.gender === "boy")!;
@@ -166,10 +173,10 @@ describe("finals scoring", () => {
   });
 
   it("only talent finalists are considered after the walk round", () => {
-    const finalists: Record<string, Finalist> = {
+    const finalists: Record<string, Finalist> = reg({
       B1: fin(1, "boy", { qualified: { talent: true } }),
       B2: fin(2, "boy"),
-    };
+    });
     const scores: FinalScores = {};
     addScore(scores, "walk", "B1", 5);
     addScore(scores, "walk", "B2", 9);
@@ -227,11 +234,11 @@ describe("finals export", () => {
   it("builds a standings sheet with winners and eliminated finalists", async () => {
     const { finalsStandingsSheet } = await import("@/lib/export");
     const { computeWinners } = await import("@/lib/finals");
-    const finalists = {
+    const finalists = reg({
       A: fin(1, "boy", { qualified: { talent: true, qa: true } }),
       B: fin(2, "boy", { qualified: { talent: true, qa: true } }),
       C: fin(3, "boy"),
-    };
+    });
     const scores: FinalScores = {};
     for (const r of ["walk", "talent", "qa"] as const) {
       addScore(scores, r, "A", 9);

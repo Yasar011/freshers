@@ -66,15 +66,27 @@ const T3 = "ZZT" + rand(25);
 const SK = "ZZTESTSTU1";
 const SK2 = "ZZTESTSTU2";
 const ORDER = { c1: 8, c2: 9, c3: 7 };
-const walkScore = (over: Record<string, unknown> = {}) => ({ scores: ORDER, timestamp: NOW, studentId: "ZZ/1", judgeName: "ZZ Judge One", ...over });
+const walkScore = (over: Record<string, unknown> = {}) => ({ scores: ORDER, timestamp: NOW, judgeName: "ZZ Judge One", ...over });
 
 const adminUid: string = (await db.ref("admin/uid").get()).val();
 if (!adminUid) throw new Error("no admin claimed");
-for (const n of ["finalConfig", "finalists", "judges", "judgeTokens", "judgeSessions", "finalScores"]) {
-  if ((await db.ref(n).get()).exists()) {
-    console.error(`Refusing to run: /${n} already has data.`);
+const NODES = ["finalConfig", "finalists", "contestants", "judges", "judgeTokens", "judgeSessions", "finalScores"];
+// If real finals data exists it is backed up, cleared for the test and restored exactly afterwards
+// (only with --restore, because the finals screens look unset for about a minute).
+const backup: Record<string, unknown> = {};
+for (const n of NODES) {
+  const snap = await db.ref(n).get();
+  if (snap.exists()) backup[n] = snap.val();
+}
+if (Object.keys(backup).length) {
+  if (!process.argv.includes("--restore")) {
+    console.error(`Refusing to run: finals data exists (${Object.keys(backup).join(", ")}). Re-run with --restore to back it up and restore it afterwards.`);
     process.exit(1);
   }
+  console.log(`Backing up existing finals data (${Object.keys(backup).join(", ")}) - it will be restored afterwards.`);
+  const { writeFileSync: wf } = await import("node:fs");
+  wf((process.env.TEMP ?? ".") + "/finals-backup.json", JSON.stringify(backup));
+  await db.ref().update(Object.fromEntries(NODES.map((n) => [n, null])));
 }
 
 const cleanupUids: string[] = [];
@@ -95,6 +107,9 @@ try {
   await no("config with a bad criterion max rejected", rest("PUT", "finalConfig/rounds/walk/criteria/c1/max", admin, 1000));
   await ok("admin selects finalists", rest("PUT", `finalists/${SK}`, admin, { studentId: "ZZ/1", name: "Rules Test", gender: "girl", number: 1, score3day: 80 }));
   await ok("admin selects a second finalist", rest("PUT", `finalists/${SK2}`, admin, { studentId: "ZZ/2", name: "Rules Test Two", gender: "boy", number: 2 }));
+  await ok("admin publishes the anonymous contestant entries", rest("PATCH", "contestants", admin, { n1: { number: 1, gender: "girl" }, n2: { number: 2, gender: "boy" } }));
+  await no("contestant with an invalid id rejected", rest("PUT", "contestants/zz", admin, { number: 9, gender: "girl" }));
+  await no("contestant with extra personal data rejected", rest("PUT", "contestants/n3", admin, { number: 3, gender: "girl", name: "Secret Name" }));
   await no("finalist with an invalid gender rejected", rest("PUT", "finalists/ZZBAD", admin, { studentId: "ZZ/9", name: "x", gender: "other", number: 3 }));
   await ok("admin creates judge 1", rest("PUT", "judges/zzj1", admin, { name: "ZZ Judge One", active: true, token: T1 }));
   await ok("admin creates judge 2", rest("PUT", "judges/zzj2", admin, { name: "ZZ Judge Two", active: true, token: T2 }));
@@ -119,6 +134,7 @@ try {
   await ok("evaluator reads own record", rest("GET", `evaluators/${evKey}`, ev));
   await no("evaluator cannot read finals config", rest("GET", "finalConfig", ev));
   await no("evaluator cannot read finalists", rest("GET", "finalists", ev));
+  await no("evaluator cannot read contestants", rest("GET", "contestants", ev));
   await no("evaluator cannot read judges", rest("GET", "judges", ev));
   await no("evaluator cannot read final scores", rest("GET", "finalScores", ev));
   await no("evaluator cannot set a student's gender", rest("PUT", `students/${SK}/gender`, ev, "boy"));
@@ -127,6 +143,7 @@ try {
   console.log("\nStrangers (anonymous, no valid session)");
   await no("cannot read finals config", rest("GET", "finalConfig", stranger.token));
   await no("cannot read finalists", rest("GET", "finalists", stranger.token));
+  await no("cannot read contestants", rest("GET", "contestants", stranger.token));
   await no("cannot read judges", rest("GET", "judges", stranger.token));
   await no("cannot list tokens", rest("GET", "judgeTokens", stranger.token));
   await no("cannot read students", rest("GET", "students", stranger.token));
@@ -141,13 +158,22 @@ try {
   await no("cannot claim judge 2 using token 1", rest("PUT", `judgeSessions/${stranger.uid}`, stranger.token, { judgeId: "zzj2", token: T1, claimedAt: NOW }));
   await no("cannot claim a DISABLED judge's link", rest("PUT", `judgeSessions/${stranger.uid}`, stranger.token, { judgeId: "zzj3", token: T3, claimedAt: NOW }));
   await no("cannot claim a session for another user", rest("PUT", `judgeSessions/${j1.uid}`, stranger.token, { judgeId: "zzj1", token: T1, claimedAt: NOW }));
-  await no("cannot write a score without a session", rest("PUT", `finalScores/walk/zzj1/${SK}`, stranger.token, walkScore()));
+  await no("cannot write a score without a session", rest("PUT", `finalScores/walk/zzj1/n1`, stranger.token, walkScore()));
 
   console.log("\nJudge 1 (valid link)");
   await ok("claims a session with the right token", rest("PUT", `judgeSessions/${j1.uid}`, j1.token, { judgeId: "zzj1", token: T1, claimedAt: NOW }));
   await ok("judge 2 claims a session", rest("PUT", `judgeSessions/${j2.uid}`, j2.token, { judgeId: "zzj2", token: T2, claimedAt: NOW }));
   await ok("reads finals config", rest("GET", "finalConfig", j1.token));
-  await ok("reads finalists", rest("GET", "finalists", j1.token));
+  await no("CANNOT read the finalists list (names / IDs / photos)", rest("GET", "finalists", j1.token));
+  await no("cannot read a single finalist", rest("GET", `finalists/${SK}`, j1.token));
+  await no("cannot read a finalist's name", rest("GET", `finalists/${SK}/name`, j1.token));
+  await ok("reads contestants (number + gender only)", rest("GET", "contestants", j1.token));
+  {
+    const body = await (await fetch(`${DB_URL}/contestants.json?auth=${j1.token}`)).text();
+    const leaked = /name|studentId|photo|class|programme|ZZ\//i.test(body);
+    if (leaked) fail++, console.log("  ✗ contestants data leaks personal details:", body.slice(0, 200));
+    else pass++, console.log("  ✓ contestants data contains no names, IDs, classes or photos");
+  }
   await ok("reads own judge record", rest("GET", "judges/zzj1", j1.token));
   await no("cannot read another judge's record", rest("GET", "judges/zzj2", j1.token));
   await no("cannot list judges", rest("GET", "judges", j1.token));
@@ -164,58 +190,58 @@ try {
   await no("cannot claim /admin", rest("PUT", "admin", j1.token, { uid: j1.uid, email: "x@y.z", role: "main_admin" }));
 
   console.log("\nScoring (round locked → open)");
-  await no("score rejected while the round is LOCKED", rest("PUT", `finalScores/walk/zzj1/${SK}`, j1.token, walkScore()));
+  await no("score rejected while the round is LOCKED", rest("PUT", `finalScores/walk/zzj1/n1`, j1.token, walkScore()));
   await ok("admin opens the Fashion Walk", rest("PATCH", "finalConfig", admin, { activeRound: "walk", "rounds/walk/status": "open" }));
-  await ok("judge 1 submits a score", rest("PUT", `finalScores/walk/zzj1/${SK}`, j1.token, walkScore()));
-  await no("duplicate submission rejected", rest("PUT", `finalScores/walk/zzj1/${SK}`, j1.token, walkScore({ scores: { c1: 10, c2: 10, c3: 10 } })));
-  await no("cannot edit own score", rest("PATCH", `finalScores/walk/zzj1/${SK}/scores`, j1.token, { c1: 10 }));
-  await no("cannot delete own score", rest("DELETE", `finalScores/walk/zzj1/${SK}`, j1.token));
-  await ok("reads own score back", rest("GET", `finalScores/walk/zzj1/${SK}`, j1.token));
-  await no("cannot score as another judge", rest("PUT", `finalScores/walk/zzj2/${SK2}`, j1.token, walkScore({ judgeName: "ZZ Judge Two", studentId: "ZZ/2" })));
-  await no("score above the criterion max rejected", rest("PUT", `finalScores/walk/zzj1/${SK2}`, j1.token, walkScore({ studentId: "ZZ/2", scores: { c1: 11, c2: 9, c3: 7 } })));
-  await no("negative score rejected", rest("PUT", `finalScores/walk/zzj1/${SK2}`, j1.token, walkScore({ studentId: "ZZ/2", scores: { c1: -1, c2: 9, c3: 7 } })));
-  await no("fractional score rejected", rest("PUT", `finalScores/walk/zzj1/${SK2}`, j1.token, walkScore({ studentId: "ZZ/2", scores: { c1: 7.5, c2: 9, c3: 7 } })));
-  await no("missing criterion rejected", rest("PUT", `finalScores/walk/zzj1/${SK2}`, j1.token, walkScore({ studentId: "ZZ/2", scores: { c1: 8, c2: 9 } })));
-  await no("unknown criterion rejected", rest("PUT", `finalScores/walk/zzj1/${SK2}`, j1.token, walkScore({ studentId: "ZZ/2", scores: { c1: 8, c2: 9, c3: 7, c4: 5 } })));
-  await no("client-chosen timestamp rejected", rest("PUT", `finalScores/walk/zzj1/${SK2}`, j1.token, walkScore({ studentId: "ZZ/2", timestamp: 1 })));
-  await no("wrong judge name rejected", rest("PUT", `finalScores/walk/zzj1/${SK2}`, j1.token, walkScore({ studentId: "ZZ/2", judgeName: "Somebody Else" })));
-  await no("wrong student id rejected", rest("PUT", `finalScores/walk/zzj1/${SK2}`, j1.token, walkScore({ studentId: "ZZ/999" })));
-  await no("fake correction/admin flags rejected", rest("PUT", `finalScores/walk/zzj1/${SK2}`, j1.token, walkScore({ studentId: "ZZ/2", enteredByAdmin: true })));
-  await no("score for a non-finalist rejected", rest("PUT", "finalScores/walk/zzj1/NOTAFINALIST", j1.token, walkScore()));
-  await no("score for a round that is not active rejected", rest("PUT", `finalScores/talent/zzj1/${SK}`, j1.token, { scores: { c1: 5, c2: 5, c3: 5 }, timestamp: NOW, studentId: "ZZ/1", judgeName: "ZZ Judge One" }));
-  await ok("judge 1 scores the second finalist", rest("PUT", `finalScores/walk/zzj1/${SK2}`, j1.token, walkScore({ studentId: "ZZ/2" })));
-  await ok("judge 2 submits their own score", rest("PUT", `finalScores/walk/zzj2/${SK}`, j2.token, walkScore({ judgeName: "ZZ Judge Two" })));
+  await ok("judge 1 submits a score", rest("PUT", `finalScores/walk/zzj1/n1`, j1.token, walkScore()));
+  await no("duplicate submission rejected", rest("PUT", `finalScores/walk/zzj1/n1`, j1.token, walkScore({ scores: { c1: 10, c2: 10, c3: 10 } })));
+  await no("cannot edit own score", rest("PATCH", `finalScores/walk/zzj1/n1/scores`, j1.token, { c1: 10 }));
+  await no("cannot delete own score", rest("DELETE", `finalScores/walk/zzj1/n1`, j1.token));
+  await ok("reads own score back", rest("GET", `finalScores/walk/zzj1/n1`, j1.token));
+  await no("cannot score as another judge", rest("PUT", `finalScores/walk/zzj2/n2`, j1.token, walkScore({ judgeName: "ZZ Judge Two" })));
+  await no("score above the criterion max rejected", rest("PUT", `finalScores/walk/zzj1/n2`, j1.token, walkScore({ scores: { c1: 11, c2: 9, c3: 7 } })));
+  await no("negative score rejected", rest("PUT", `finalScores/walk/zzj1/n2`, j1.token, walkScore({ scores: { c1: -1, c2: 9, c3: 7 } })));
+  await no("fractional score rejected", rest("PUT", `finalScores/walk/zzj1/n2`, j1.token, walkScore({ scores: { c1: 7.5, c2: 9, c3: 7 } })));
+  await no("missing criterion rejected", rest("PUT", `finalScores/walk/zzj1/n2`, j1.token, walkScore({ scores: { c1: 8, c2: 9 } })));
+  await no("unknown criterion rejected", rest("PUT", `finalScores/walk/zzj1/n2`, j1.token, walkScore({ scores: { c1: 8, c2: 9, c3: 7, c4: 5 } })));
+  await no("client-chosen timestamp rejected", rest("PUT", `finalScores/walk/zzj1/n2`, j1.token, walkScore({ timestamp: 1 })));
+  await no("wrong judge name rejected", rest("PUT", `finalScores/walk/zzj1/n2`, j1.token, walkScore({ judgeName: "Somebody Else" })));
+  await no("fake correction/admin flags rejected", rest("PUT", `finalScores/walk/zzj1/n2`, j1.token, walkScore({ enteredByAdmin: true })));
+  await no("score for a non-finalist rejected", rest("PUT", "finalScores/walk/zzj1/n99", j1.token, walkScore()));
+  await no("score for a round that is not active rejected", rest("PUT", `finalScores/talent/zzj1/n1`, j1.token, { scores: { c1: 5, c2: 5, c3: 5 }, timestamp: NOW, judgeName: "ZZ Judge One" }));
+  await ok("judge 1 scores the second finalist", rest("PUT", `finalScores/walk/zzj1/n2`, j1.token, walkScore()));
+  await ok("judge 2 submits their own score", rest("PUT", `finalScores/walk/zzj2/n1`, j2.token, walkScore({ judgeName: "ZZ Judge Two" })));
 
   console.log("\nTalent / Q&A gating");
   await ok("admin opens the Talent round", rest("PATCH", "finalConfig", admin, { activeRound: "talent", "rounds/talent/status": "open", "rounds/walk/status": "locked" }));
-  const talent = (studentId: string) => ({ scores: { c1: 5, c2: 5, c3: 5 }, timestamp: NOW, studentId, judgeName: "ZZ Judge One" });
-  await no("non-qualified finalist cannot be scored in Talent", rest("PUT", `finalScores/talent/zzj1/${SK}`, j1.token, talent("ZZ/1")));
-  await ok("admin qualifies finalist 1 for Talent", rest("PUT", `finalists/${SK}/qualified/talent`, admin, true));
-  await ok("qualified finalist can be scored in Talent", rest("PUT", `finalScores/talent/zzj1/${SK}`, j1.token, talent("ZZ/1")));
-  await no("qualified flag must be true", rest("PUT", `finalists/${SK}/qualified/qa`, admin, false));
+  const talent = () => ({ scores: { c1: 5, c2: 5, c3: 5 }, timestamp: NOW, judgeName: "ZZ Judge One" });
+  await no("non-qualified finalist cannot be scored in Talent", rest("PUT", `finalScores/talent/zzj1/n1`, j1.token, talent()));
+  await ok("admin qualifies finalist 1 for Talent", rest("PUT", `contestants/n1/qualified/talent`, admin, true));
+  await ok("qualified finalist can be scored in Talent", rest("PUT", `finalScores/talent/zzj1/n1`, j1.token, talent()));
+  await no("qualified flag must be true", rest("PUT", `contestants/n1/qualified/qa`, admin, false));
 
   console.log("\nLink management");
   await ok("admin regenerates judge 1's link", rest("PATCH", "judges/zzj1", admin, { token: "ZZN" + rand(25) }));
-  await no("old session stops working after regeneration", rest("GET", "finalists", j1.token));
-  await ok("judge 2 still works", rest("GET", "finalists", j2.token));
+  await no("old session stops working after regeneration", rest("GET", "contestants", j1.token));
+  await ok("judge 2 still works", rest("GET", "contestants", j2.token));
   await ok("admin disables judge 2", rest("PATCH", "judges/zzj2", admin, { active: false }));
-  await no("disabled judge loses access immediately", rest("GET", "finalists", j2.token));
+  await no("disabled judge loses access immediately", rest("GET", "contestants", j2.token));
   await ok("admin re-enables judge 2", rest("PATCH", "judges/zzj2", admin, { active: true }));
-  await ok("judge 2 works again", rest("GET", "finalists", j2.token));
+  await ok("judge 2 works again", rest("GET", "contestants", j2.token));
   await ok("admin removes judge 2", rest("DELETE", "judges/zzj2", admin));
-  await no("removed judge loses access", rest("GET", "finalists", j2.token));
+  await no("removed judge loses access", rest("GET", "contestants", j2.token));
 
   console.log("\nAdmin corrections");
-  await ok("admin corrects a judge's score", rest("PATCH", `finalScores/walk/zzj1/${SK}`, admin, { "scores/c1": 10, correction: { originalTotal: 24, reason: "typo", correctedAt: Date.now(), count: 1 } }));
-  await no("correction without a reason rejected", rest("PATCH", `finalScores/walk/zzj1/${SK}`, admin, { correction: { originalTotal: 24, correctedAt: Date.now(), count: 2 } }));
-  await no("admin correction above max rejected", rest("PATCH", `finalScores/walk/zzj1/${SK}`, admin, { "scores/c1": 99 }));
-  await ok("admin resets (deletes) a score", rest("DELETE", `finalScores/walk/zzj1/${SK}`, admin));
-  await ok("admin enters a missing score", rest("PUT", `finalScores/walk/zzj1/${SK}`, admin, { scores: ORDER, timestamp: Date.now(), studentId: "ZZ/1", judgeName: "ZZ Judge One", enteredByAdmin: true }));
+  await ok("admin corrects a judge's score", rest("PATCH", `finalScores/walk/zzj1/n1`, admin, { "scores/c1": 10, correction: { originalTotal: 24, reason: "typo", correctedAt: Date.now(), count: 1 } }));
+  await no("correction without a reason rejected", rest("PATCH", `finalScores/walk/zzj1/n1`, admin, { correction: { originalTotal: 24, correctedAt: Date.now(), count: 2 } }));
+  await no("admin correction above max rejected", rest("PATCH", `finalScores/walk/zzj1/n1`, admin, { "scores/c1": 99 }));
+  await ok("admin resets (deletes) a score", rest("DELETE", `finalScores/walk/zzj1/n1`, admin));
+  await ok("admin enters a missing score", rest("PUT", `finalScores/walk/zzj1/n1`, admin, { scores: ORDER, timestamp: Date.now(), judgeName: "ZZ Judge One", enteredByAdmin: true }));
 } finally {
   console.log("\nCleaning up…");
   await db.ref().update({
     finalConfig: null,
     finalists: null,
+    contestants: null,
     judges: null,
     judgeTokens: null,
     judgeSessions: null,
@@ -224,7 +250,12 @@ try {
     "evaluators/rules-test-ev@example,com": null,
   });
   for (const uid of cleanupUids) await auth.deleteUser(uid).catch(() => undefined);
-  const left = await Promise.all(["finalConfig", "finalists", "judges", "judgeTokens", "judgeSessions", "finalScores", `students/${SK}`, "evaluators/rules-test-ev@example,com"].map(async (n) => (await db.ref(n).get()).exists()));
+  if (Object.keys(backup).length) {
+    await db.ref().update(backup);
+    const check = await Promise.all(Object.keys(backup).map(async (n) => JSON.stringify((await db.ref(n).get()).val()) === JSON.stringify(backup[n])));
+    console.log(check.every(Boolean) ? "Existing finals data restored exactly." : "WARNING: RESTORE MISMATCH - backup saved in finals-backup.json");
+  }
+  const left = Object.keys(backup).length ? [false] : await Promise.all(["finalConfig", "finalists", "contestants", "judges", "judgeTokens", "judgeSessions", "finalScores", `students/${SK}`, "evaluators/rules-test-ev@example,com"].map(async (n) => (await db.ref(n).get()).exists()));
   console.log(left.some(Boolean) ? "⚠ some test data remains!" : "All test data removed.");
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

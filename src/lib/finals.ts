@@ -64,16 +64,35 @@ export interface FinalScoreCorrection {
   count: number;
 }
 
+/**
+ * What a judge is allowed to know about a contestant: only the number and gender.
+ * Stored at /contestants/{cid} (judge-readable). Names, IDs, classes and photos live only in
+ * /finalists (admin-only), so they never reach a judge's browser.
+ */
+export interface Contestant {
+  number: number;
+  gender: Gender;
+  qualified?: Partial<Record<RoundKey, boolean>>;
+}
+
+/** Opaque contestant id used for judge-facing data and score keys ("n7" for contestant #7). */
+export const cidOf = (f: { number: number }) => `n${f.number}`;
+
+export function contestantRecord(f: Finalist): Contestant {
+  const c: Contestant = { number: f.number, gender: f.gender };
+  if (f.qualified && Object.values(f.qualified).some(Boolean)) c.qualified = f.qualified;
+  return c;
+}
+
 export interface FinalScore {
   scores: Record<string, number>;
   timestamp: number;
-  studentId: string;
   judgeName: string;
   enteredByAdmin?: boolean;
   correction?: FinalScoreCorrection;
 }
 
-/** finalScores/{round}/{judgeId}/{studentKey} */
+/** finalScores/{round}/{judgeId}/{cid}  — keyed by contestant id (cidOf), never by student ID */
 export type FinalScores = Partial<Record<RoundKey, Record<string, Record<string, FinalScore>>>>;
 
 export const ROUND_TITLES: Record<RoundKey, string> = { walk: "Fashion Walk", talent: "Talent Round", qa: "Question & Answer" };
@@ -160,14 +179,14 @@ export interface FinalistRoundResult {
 }
 
 export function roundResult(
-  studentKey: string,
+  cid: string,
   round: RoundKey,
   panel: JudgePanelMember[],
   scores: FinalScores | null | undefined,
   config: FinalConfig | null | undefined,
 ): FinalistRoundResult {
   const byJudge = scores?.[round] ?? {};
-  const entries = panel.map((member) => ({ member, score: byJudge[member.id]?.[studentKey] ?? null }));
+  const entries = panel.map((member) => ({ member, score: byJudge[member.id]?.[cid] ?? null }));
   const done = entries.filter((e) => e.score).length;
   const raw = entries.reduce((s, e) => s + judgeTotal(e.score), 0);
   const max = panel.length * roundMax(config?.rounds?.[round]);
@@ -175,7 +194,7 @@ export function roundResult(
 }
 
 /** Does this finalist take part in the given round? */
-export function takesPart(f: Finalist, round: RoundKey): boolean {
+export function takesPart(f: { qualified?: Finalist["qualified"] }, round: RoundKey): boolean {
   return round === "walk" ? true : f.qualified?.[round] === true;
 }
 
@@ -227,7 +246,7 @@ export function computeStandings(
 ): FinalStanding[] {
   const panel = judgePanel(judges);
   const list: FinalStanding[] = Object.entries(finalists ?? {}).map(([key, finalist]) => {
-    const rounds = Object.fromEntries(ROUND_KEYS.map((r) => [r, roundResult(key, r, panel, scores, config)])) as Record<RoundKey, FinalistRoundResult>;
+    const rounds = Object.fromEntries(ROUND_KEYS.map((r) => [r, roundResult(cidOf(finalist), r, panel, scores, config)])) as Record<RoundKey, FinalistRoundResult>;
     const per = { walk: rounds.walk.score100, talent: rounds.talent.score100, qa: rounds.qa.score100 };
     return {
       key,
@@ -302,7 +321,7 @@ export function recommendAdvance(
   const standings = computeStandings(finalists, judges, scores, config).filter((s) => takesPart(s.finalist, round));
   const rounds: RoundKey[] = round === "walk" ? ["walk"] : ["walk", "talent"];
   const panel = judgePanel(judges);
-  const cumulative = (s: FinalStanding) => weighted(config, Object.fromEntries(rounds.map((r) => [r, roundResult(s.key, r, panel, scores, config).score100])), rounds);
+  const cumulative = (s: FinalStanding) => weighted(config, Object.fromEntries(rounds.map((r) => [r, roundResult(cidOf(s.finalist), r, panel, scores, config).score100])), rounds);
   return GENDERS.map((gender) => {
     const wanted = Number(gender === "boy" ? config?.rounds?.[round]?.advanceBoys : config?.rounds?.[round]?.advanceGirls) || 0;
     const group = standings

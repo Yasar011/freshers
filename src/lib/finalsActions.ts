@@ -2,7 +2,7 @@
 import { get, push, ref, serverTimestamp, set, update } from "firebase/database";
 import { db } from "./firebase";
 import { withAudit, type AdminIdentity, type Updates } from "./actions";
-import { defaultFinalConfig, judgeTotal, roundMax, ROUND_TITLES, type FinalConfig, type FinalCriterion, type FinalScore, type Finalist, type Gender, type Judge, type RoundKey } from "./finals";
+import { cidOf, contestantRecord, defaultFinalConfig, judgeTotal, roundMax, ROUND_KEYS, ROUND_TITLES, type FinalConfig, type FinalCriterion, type FinalScore, type FinalScores, type Finalist, type Gender, type Judge, type RoundKey } from "./finals";
 import type { Student } from "./types";
 
 // ───────────────────────── Setup ─────────────────────────
@@ -17,7 +17,10 @@ export async function initFinalConfig(admin: AdminIdentity) {
 
 export async function setStudentGender(admin: AdminIdentity, key: string, student: Student, gender: Gender, finalist?: Finalist) {
   const updates: Updates = { [`students/${key}/gender`]: gender, [`students/${key}/genderConfirmed`]: true };
-  if (finalist) updates[`finalists/${key}/gender`] = gender;
+  if (finalist) {
+    updates[`finalists/${key}/gender`] = gender;
+    updates[`contestants/${cidOf(finalist)}/gender`] = gender;
+  }
   await update(
     ref(db()),
     withAudit(updates, admin, {
@@ -71,7 +74,13 @@ export async function selectFinalist(admin: AdminIdentity, key: string, student:
   if (!student.gender) throw new Error("Set the student's gender (Boy / Girl) first.");
   await update(
     ref(db()),
-    withAudit({ [`finalists/${key}`]: finalistRecord(student, number, score3day) }, admin, {
+    withAudit(
+      {
+        [`finalists/${key}`]: finalistRecord(student, number, score3day),
+        [`contestants/n${number}`]: contestantRecord({ number, gender: student.gender! } as Finalist),
+      },
+      admin,
+      {
       action: "finalist_selected",
       studentId: student.studentId,
       details: `${student.studentId} — ${student.name} (${student.gender}) selected for the Finals as #${number}.`,
@@ -79,13 +88,23 @@ export async function selectFinalist(admin: AdminIdentity, key: string, student:
   );
 }
 
-export async function removeFinalist(admin: AdminIdentity, key: string, finalist: Finalist) {
+/** Updates that delete every judge score given to a contestant (all rounds, all judges). */
+function scoreDeletions(scores: FinalScores | null | undefined, cid: string): Updates {
+  const u: Updates = {};
+  for (const r of ROUND_KEYS) for (const [judgeId, byCid] of Object.entries(scores?.[r] ?? {})) if (byCid?.[cid]) u[`finalScores/${r}/${judgeId}/${cid}`] = null;
+  return u;
+}
+
+export async function removeFinalist(admin: AdminIdentity, key: string, finalist: Finalist, scores?: FinalScores | null) {
+  const cid = cidOf(finalist);
+  const updates: Updates = { [`finalists/${key}`]: null, [`contestants/${cid}`]: null, ...scoreDeletions(scores, cid) };
+  const n = Object.keys(updates).length - 2;
   await update(
     ref(db()),
-    withAudit({ [`finalists/${key}`]: null }, admin, {
+    withAudit(updates, admin, {
       action: "finalist_removed",
       studentId: finalist.studentId,
-      details: `${finalist.studentId} — ${finalist.name} removed from the Finals. Any scores they received are kept but no longer counted.`,
+      details: `${finalist.studentId} — ${finalist.name} (#${finalist.number}) removed from the Finals${n ? ` together with ${n} judge score(s)` : ""}.`,
     }),
   );
 }
@@ -95,14 +114,22 @@ export async function replaceFinalists(
   admin: AdminIdentity,
   picks: { key: string; student: Student; score: number }[],
   current: Record<string, Finalist>,
+  scores?: FinalScores | null,
 ) {
   const updates: Updates = {};
   const keep = new Set(picks.map((p) => p.key));
-  for (const k of Object.keys(current)) if (!keep.has(k)) updates[`finalists/${k}`] = null;
+  for (const [k, f] of Object.entries(current)) {
+    if (keep.has(k)) continue;
+    updates[`finalists/${k}`] = null;
+    updates[`contestants/${cidOf(f)}`] = null;
+    Object.assign(updates, scoreDeletions(scores, cidOf(f)));
+  }
   let next = Math.max(0, ...Object.values(current).map((f) => f.number || 0)) + 1;
   for (const p of picks) {
     const prev = current[p.key];
-    updates[`finalists/${p.key}`] = finalistRecord(p.student, prev?.number ?? next++, p.score, prev);
+    const number = prev?.number ?? next++;
+    updates[`finalists/${p.key}`] = finalistRecord(p.student, number, p.score, prev);
+    updates[`contestants/n${number}`] = contestantRecord({ number, gender: p.student.gender!, qualified: prev?.qualified } as Finalist);
   }
   await update(
     ref(db()),
@@ -116,7 +143,11 @@ export async function replaceFinalists(
 export async function setQualified(admin: AdminIdentity, round: "talent" | "qa", all: string[], selected: string[], finalists: Record<string, Finalist>) {
   const sel = new Set(selected);
   const updates: Updates = {};
-  for (const k of all) updates[`finalists/${k}/qualified/${round}`] = sel.has(k) ? true : null;
+  for (const k of all) {
+    const v = sel.has(k) ? true : null;
+    updates[`finalists/${k}/qualified/${round}`] = v;
+    if (finalists[k]) updates[`contestants/${cidOf(finalists[k])}/qualified/${round}`] = v;
+  }
   const names = selected.map((k) => finalists[k]?.name).filter(Boolean).join(", ");
   await update(
     ref(db()),
@@ -258,14 +289,13 @@ export async function saveRoundSettings(admin: AdminIdentity, round: RoundKey, s
 
 // ───────────────────────── Scores (admin) ─────────────────────────
 
-export const finalScorePath = (round: RoundKey, judgeId: string, studentKey: string) => `finalScores/${round}/${judgeId}/${studentKey}`;
+export const finalScorePath = (round: RoundKey, judgeId: string, cid: string) => `finalScores/${round}/${judgeId}/${cid}`;
 
 /** Judge submission — resolves only once the server has accepted the write. */
-export function submitFinalScore(round: RoundKey, judgeId: string, studentKey: string, finalist: Finalist, judgeName: string, scores: Record<string, number>) {
-  return set(ref(db(), finalScorePath(round, judgeId, studentKey)), {
+export function submitFinalScore(round: RoundKey, judgeId: string, cid: string, judgeName: string, scores: Record<string, number>) {
+  return set(ref(db(), finalScorePath(round, judgeId, cid)), {
     scores,
     timestamp: serverTimestamp(),
-    studentId: finalist.studentId,
     judgeName,
   });
 }
@@ -282,13 +312,12 @@ export async function correctFinalScore(
   config: FinalConfig,
   judgeId: string,
   judgeName: string,
-  studentKey: string,
   finalist: Finalist,
   current: FinalScore,
   scores: Record<string, number>,
   reason: string,
 ) {
-  const path = finalScorePath(round, judgeId, studentKey);
+  const path = finalScorePath(round, judgeId, cidOf(finalist));
   const crit = config.rounds[round].criteria;
   const max = roundMax(config.rounds[round]);
   const total = Object.values(scores).reduce((s, v) => s + v, 0);
@@ -323,7 +352,6 @@ export async function resetFinalScore(
   config: FinalConfig,
   judgeId: string,
   judgeName: string,
-  studentKey: string,
   finalist: Finalist,
   current: FinalScore,
   reason: string,
@@ -331,7 +359,7 @@ export async function resetFinalScore(
   const max = roundMax(config.rounds[round]);
   await update(
     ref(db()),
-    withAudit({ [finalScorePath(round, judgeId, studentKey)]: null }, admin, {
+    withAudit({ [finalScorePath(round, judgeId, cidOf(finalist))]: null }, admin, {
       action: "final_score_reset",
       day: round,
       studentId: finalist.studentId,
@@ -350,7 +378,6 @@ export async function adminEnterFinalScore(
   config: FinalConfig,
   judgeId: string,
   judgeName: string,
-  studentKey: string,
   finalist: Finalist,
   scores: Record<string, number>,
   reason: string,
@@ -360,7 +387,7 @@ export async function adminEnterFinalScore(
   await update(
     ref(db()),
     withAudit(
-      { [finalScorePath(round, judgeId, studentKey)]: { scores, timestamp: serverTimestamp(), studentId: finalist.studentId, judgeName, enteredByAdmin: true } },
+      { [finalScorePath(round, judgeId, cidOf(finalist))]: { scores, timestamp: serverTimestamp(), judgeName, enteredByAdmin: true } },
       admin,
       {
         action: "final_score_entered_by_admin",

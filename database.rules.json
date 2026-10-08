@@ -360,7 +360,7 @@
       }
     },
     "finalists": {
-      ".read": "auth != null && root.child('admin/uid').val() === auth.uid || (auth != null && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('active').val() === true && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('token').val() === root.child('judgeSessions').child(auth.uid).child('token').val())",
+      ".read": "auth != null && root.child('admin/uid').val() === auth.uid",
       ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
       "$studentKey": {
         ".validate": "newData.hasChildren(['studentId','name','gender','number'])",
@@ -459,9 +459,9 @@
       "$round": {
         "$judgeId": {
           ".read": "auth != null && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('active').val() === true && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('token').val() === root.child('judgeSessions').child(auth.uid).child('token').val() && root.child('judgeSessions').child(auth.uid).child('judgeId').val() === $judgeId",
-          "$studentKey": {
-            ".write": "auth != null && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('active').val() === true && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('token').val() === root.child('judgeSessions').child(auth.uid).child('token').val() && root.child('judgeSessions').child(auth.uid).child('judgeId').val() === $judgeId && !data.exists() && newData.exists() && root.child('finalConfig/activeRound').val() === $round && root.child('finalConfig/rounds').child($round).child('status').val() === 'open' && root.child('finalists').child($studentKey).exists() && ($round === 'walk' || root.child('finalists').child($studentKey).child('qualified').child($round).val() === true) && newData.child('timestamp').val() === now && !newData.child('correction').exists() && !newData.child('enteredByAdmin').exists() && newData.child('judgeName').val() === root.child('judges').child($judgeId).child('name').val()",
-            ".validate": "root.child('finalConfig/rounds').child($round).exists() && root.child('judges').child($judgeId).exists() && newData.hasChildren(['scores','timestamp','studentId','judgeName']) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c1').exists() || newData.child('scores/c1').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c2').exists() || newData.child('scores/c2').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c3').exists() || newData.child('scores/c3').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c4').exists() || newData.child('scores/c4').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c5').exists() || newData.child('scores/c5').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c6').exists() || newData.child('scores/c6').exists()) && newData.child('studentId').val() === root.child('finalists').child($studentKey).child('studentId').val()",
+          "$cid": {
+            ".write": "auth != null && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('active').val() === true && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('token').val() === root.child('judgeSessions').child(auth.uid).child('token').val() && root.child('judgeSessions').child(auth.uid).child('judgeId').val() === $judgeId && !data.exists() && newData.exists() && root.child('finalConfig/activeRound').val() === $round && root.child('finalConfig/rounds').child($round).child('status').val() === 'open' && root.child('contestants').child($cid).exists() && ($round === 'walk' || root.child('contestants').child($cid).child('qualified').child($round).val() === true) && newData.child('timestamp').val() === now && !newData.child('correction').exists() && !newData.child('enteredByAdmin').exists() && newData.child('judgeName').val() === root.child('judges').child($judgeId).child('name').val()",
+            ".validate": "root.child('finalConfig/rounds').child($round).exists() && root.child('judges').child($judgeId).exists() && root.child('contestants').child($cid).exists() && newData.hasChildren(['scores','timestamp','judgeName']) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c1').exists() || newData.child('scores/c1').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c2').exists() || newData.child('scores/c2').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c3').exists() || newData.child('scores/c3').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c4').exists() || newData.child('scores/c4').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c5').exists() || newData.child('scores/c5').exists()) && (!root.child('finalConfig/rounds').child($round).child('criteria').child('c6').exists() || newData.child('scores/c6').exists())",
             "scores": {
               "$crit": {
                 ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= root.child('finalConfig/rounds').child($round).child('criteria').child($crit).child('max').val()"
@@ -469,9 +469,6 @@
             },
             "timestamp": {
               ".validate": "newData.isNumber()"
-            },
-            "studentId": {
-              ".validate": "newData.isString()"
             },
             "judgeName": {
               ".validate": "newData.isString() && newData.val().length <= 80"
@@ -507,6 +504,27 @@
               ".validate": false
             }
           }
+        }
+      }
+    },
+    "contestants": {
+      ".read": "auth != null && root.child('admin/uid').val() === auth.uid || (auth != null && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('active').val() === true && root.child('judges').child(root.child('judgeSessions').child(auth.uid).child('judgeId').val()).child('token').val() === root.child('judgeSessions').child(auth.uid).child('token').val())",
+      ".write": "auth != null && root.child('admin/uid').val() === auth.uid",
+      "$cid": {
+        ".validate": "$cid.matches(/^n[0-9]{1,3}$/) && newData.hasChildren(['number','gender'])",
+        "number": {
+          ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1"
+        },
+        "gender": {
+          ".validate": "newData.val() === 'boy' || newData.val() === 'girl'"
+        },
+        "qualified": {
+          "$round": {
+            ".validate": "newData.val() === true"
+          }
+        },
+        "$other": {
+          ".validate": false
         }
       }
     }

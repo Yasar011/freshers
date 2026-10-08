@@ -1,12 +1,12 @@
 "use client";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { onValue, ref } from "firebase/database";
+import { onValue, ref, update } from "firebase/database";
 import { db, errorMessage } from "@/lib/firebase";
 import { dayKeys } from "@/lib/keys";
 import { panelOf, perEvaluatorMax, type PanelMember } from "@/lib/scoring";
 import type { EventInfo, Evaluator, EvaluationsTree, Settings, Student } from "@/lib/types";
 import type { AdminIdentity } from "@/lib/actions";
-import { judgePanel, type FinalConfig, type FinalScores, type Finalist, type Judge, type JudgePanelMember } from "@/lib/finals";
+import { cidOf, contestantRecord, judgePanel, type Contestant, type FinalConfig, type FinalScores, type Finalist, type Judge, type JudgePanelMember } from "@/lib/finals";
 
 interface AdminData {
   admin: AdminIdentity;
@@ -32,6 +32,11 @@ interface AdminData {
 
 const Ctx = createContext<AdminData | null>(null);
 
+/** Field-wise comparison (Firebase returns keys in a different order, so never compare JSON strings). */
+function sameContestant(a: Contestant, b: Contestant | undefined): boolean {
+  return !!b && a.number === b.number && a.gender === b.gender && (["talent", "qa"] as const).every((r) => !!a.qualified?.[r] === !!b.qualified?.[r]);
+}
+
 /** Live (realtime) subscription to everything the admin dashboard needs. */
 export function AdminDataProvider({ admin, children }: { admin: AdminIdentity; children: ReactNode }) {
   const [event, setEvent] = useState<EventInfo | null | undefined>(undefined);
@@ -43,6 +48,7 @@ export function AdminDataProvider({ admin, children }: { admin: AdminIdentity; c
   const [finalists, setFinalists] = useState<Record<string, Finalist> | undefined>(undefined);
   const [judges, setJudges] = useState<Record<string, Judge> | undefined>(undefined);
   const [finalScores, setFinalScores] = useState<FinalScores | undefined>(undefined);
+  const [contestants, setContestants] = useState<Record<string, Contestant> | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -57,15 +63,27 @@ export function AdminDataProvider({ admin, children }: { admin: AdminIdentity; c
       onValue(ref(db(), "finalists"), (s) => setFinalists(s.val() ?? {}), onErr),
       onValue(ref(db(), "judges"), (s) => setJudges(s.val() ?? {}), onErr),
       onValue(ref(db(), "finalScores"), (s) => setFinalScores(s.val() ?? {}), onErr),
+      onValue(ref(db(), "contestants"), (s) => setContestants(s.val() ?? {}), onErr),
     ];
     return () => subs.forEach((u) => u());
   }, []);
+
+  // Self-heal: the judge-facing /contestants entries (number + gender + rounds only) must mirror /finalists.
+  useEffect(() => {
+    if (!finalists || !contestants) return;
+    const expected: Record<string, Contestant> = {};
+    for (const f of Object.values(finalists)) expected[cidOf(f)] = contestantRecord(f);
+    const updates: Record<string, unknown> = {};
+    for (const [cid, c] of Object.entries(expected)) if (!sameContestant(c, contestants[cid])) updates[`contestants/${cid}`] = c;
+    for (const cid of Object.keys(contestants)) if (!expected[cid]) updates[`contestants/${cid}`] = null;
+    if (Object.keys(updates).length) update(ref(db()), updates).catch(() => undefined);
+  }, [finalists, contestants]);
 
   const value = useMemo<AdminData>(() => {
     const totalDays = event?.totalDays ?? settings?.totalDays ?? 3;
     return {
       admin,
-      loading: [event, settings, students, evaluators, evaluations, finalConfig, finalists, judges, finalScores].some((v) => v === undefined),
+      loading: [event, settings, students, evaluators, evaluations, finalConfig, finalists, judges, finalScores, contestants].some((v) => v === undefined),
       error,
       event: event ?? null,
       settings: settings ?? null,
@@ -83,7 +101,7 @@ export function AdminDataProvider({ admin, children }: { admin: AdminIdentity; c
       days: dayKeys(totalDays),
       activeDay: event?.activeDay ?? "day1",
     };
-  }, [admin, event, settings, students, evaluators, evaluations, finalConfig, finalists, judges, finalScores, error]);
+  }, [admin, event, settings, students, evaluators, evaluations, finalConfig, finalists, judges, finalScores, contestants, error]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -81,7 +81,7 @@ export function nextFinalistNumber(finalists: Record<string, Finalist>): number 
  * Handles unknown gender, the per-gender limit and removal.
  */
 export function FinalistToggle({ studentKey, student, compact, score3day }: { studentKey: string; student: Student; compact?: boolean; score3day?: number | null }) {
-  const { finalists, counts, perGender, finalConfig, admin } = useFinals();
+  const { finalists, finalScores, counts, perGender, finalConfig, admin } = useFinals();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<"remove" | "over" | null>(null);
@@ -131,8 +131,8 @@ export function FinalistToggle({ studentKey, student, compact, score3day }: { st
           title="Remove from Finals?"
           tone="danger"
           confirmLabel="Remove finalist"
-          message={<>{finalist.name} ({finalist.studentId}) will be removed from the Finals. Any scores already given to them are kept but no longer counted.</>}
-          onConfirm={() => run(() => removeFinalist(admin, studentKey, finalist), "Removed from the Finals")}
+          message={<>{finalist.name} ({finalist.studentId}) will be removed from the Finals. Any judge scores they already received are deleted with them.</>}
+          onConfirm={() => run(() => removeFinalist(admin, studentKey, finalist, finalScores), "Removed from the Finals")}
         />
       </>
     );

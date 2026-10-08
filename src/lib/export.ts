@@ -1,7 +1,7 @@
 import { CRITERIA_KEYS, type Evaluator, type EvaluationsTree, type Settings, type Student } from "./types";
 import { dayKeys, dayLabel, evaluatorDisplayName } from "./keys";
 import { panelOf, perEvaluatorMax, round2, type FinalResult } from "./scoring";
-import { judgeTotal, roundMax, ROUND_KEYS, ROUND_TITLES, type FinalConfig, type FinalScores, type FinalStanding, type Finalist, type JudgePanelMember, type Winners } from "./finals";
+import { cidOf, judgeTotal, roundMax, ROUND_KEYS, ROUND_TITLES, type FinalConfig, type FinalScores, type FinalStanding, type Finalist, type JudgePanelMember, type Winners } from "./finals";
 
 export type SheetRow = (string | number | null)[];
 export interface Sheet {
@@ -233,7 +233,7 @@ export function finalsDetailedSheet(finalists: Record<string, Finalist>, panel: 
     const list = Object.entries(finalists).sort((a, b) => a[1].number - b[1].number);
     for (const [key, f] of list) {
       for (const m of panel) {
-        const sc = scores[r]?.[m.id]?.[key];
+        const sc = scores[r]?.[m.id]?.[cidOf(f)];
         if (!sc) continue;
         rows.push([
           round.label,
