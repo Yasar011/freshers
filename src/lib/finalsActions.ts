@@ -77,7 +77,7 @@ export async function selectFinalist(admin: AdminIdentity, key: string, student:
     withAudit(
       {
         [`finalists/${key}`]: finalistRecord(student, number, score3day),
-        [`contestants/n${number}`]: contestantRecord({ number, gender: student.gender! } as Finalist),
+        [`contestants/n${number}`]: contestantRecord({ number, name: student.name, gender: student.gender! } as Finalist),
       },
       admin,
       {
@@ -129,7 +129,7 @@ export async function replaceFinalists(
     const prev = current[p.key];
     const number = prev?.number ?? next++;
     updates[`finalists/${p.key}`] = finalistRecord(p.student, number, p.score, prev);
-    updates[`contestants/n${number}`] = contestantRecord({ number, gender: p.student.gender!, qualified: prev?.qualified } as Finalist);
+    updates[`contestants/n${number}`] = contestantRecord({ number, name: p.student.name, gender: p.student.gender!, qualified: prev?.qualified } as Finalist);
   }
   await update(
     ref(db()),
@@ -406,5 +406,51 @@ export async function setPerGender(admin: AdminIdentity, n: number) {
   await update(
     ref(db()),
     withAudit({ "finalConfig/perGender": n }, admin, { action: "round_settings_updated", details: `Finalists per gender set to ${n} (${n * 2} in total).` }),
+  );
+}
+
+// ───────────────────────── Contestant numbers ─────────────────────────
+
+/**
+ * Change a finalist's contestant number. If the new number belongs to another finalist the two are swapped.
+ * Scores are stored per contestant number, so renumbering is only allowed while neither contestant has any
+ * judge score yet (otherwise scores would silently move to a different person).
+ */
+export async function renumberFinalist(
+  admin: AdminIdentity,
+  key: string,
+  newNumber: number,
+  finalists: Record<string, Finalist>,
+  scores: FinalScores | null | undefined,
+) {
+  const me = finalists[key];
+  if (!me) throw new Error("Finalist not found.");
+  if (!Number.isInteger(newNumber) || newNumber < 1 || newNumber > 999) throw new Error("Use a whole number from 1 to 999.");
+  if (newNumber === me.number) return;
+  const otherEntry = Object.entries(finalists).find(([k, f]) => k !== key && f.number === newNumber);
+  const hasScores = (f: Finalist) => ROUND_KEYS.some((r) => Object.values(scores?.[r] ?? {}).some((byCid) => byCid?.[cidOf(f)]));
+  if (hasScores(me) || (otherEntry && hasScores(otherEntry[1]))) {
+    throw new Error("Judges have already scored this contestant (or the one holding that number). Reset those scores first, or renumber before judging starts.");
+  }
+  const old = me.number;
+  const updates: Updates = {
+    [`finalists/${key}/number`]: newNumber,
+    [`contestants/n${newNumber}`]: contestantRecord({ ...me, number: newNumber }),
+  };
+  if (otherEntry) {
+    updates[`finalists/${otherEntry[0]}/number`] = old;
+    updates[`contestants/n${old}`] = contestantRecord({ ...otherEntry[1], number: old });
+  } else {
+    updates[`contestants/n${old}`] = null;
+  }
+  await update(
+    ref(db()),
+    withAudit(updates, admin, {
+      action: "finalist_renumbered",
+      studentId: me.studentId,
+      details: otherEntry
+        ? `${me.name}: #${old} → #${newNumber} (swapped with ${otherEntry[1].name}, now #${old}).`
+        : `${me.name}: contestant number #${old} → #${newNumber}.`,
+    }),
   );
 }

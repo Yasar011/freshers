@@ -9,7 +9,7 @@ import { cidOf, takesPart, type JudgePanelMember } from "@/lib/finals";
 import { errorMessage } from "@/lib/firebase";
 
 export default function JudgesTab() {
-  const { judgePanel, finalConfig, finalists, finalScores, admin } = useFinals();
+  const { judgePanel, allJudges, finalConfig, finalists, finalScores, admin } = useFinals();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<JudgePanelMember | null>(null);
@@ -39,23 +39,23 @@ export default function JudgesTab() {
   return (
     <div className="space-y-4">
       <Alert tone="blue">
-        Create one link per judge (2–4 judges). The judge opens the link on their phone — <b>no Google login needed</b> — and sees only contestant numbers (Girl / Boy), never names, IDs or photos. Each link is personal: scores are saved under that judge&apos;s name. Every judge listed here is expected to score every contestant, so remove links you don&apos;t need.
+        Create one link per judge — <b>3 to 6 judges</b> (you can add or remove them until the finals start). The judge opens the link on their phone — <b>no Google login needed</b> — and sees only each contestant&apos;s <b>number and name</b>, never IDs, departments or photos. Each link is personal: scores are saved under that judge&apos;s name. Scores are calculated out of the judges whose link is <b>active</b>, so if a judge doesn&apos;t turn up, just disable their link.
       </Alert>
       <Card>
         <CardHeader
           title="Judges"
-          subtitle={`${judgePanel.length} judge link${judgePanel.length === 1 ? "" : "s"}${judgePanel.length > 4 ? " — more than the usual 2–4" : ""}`}
+          subtitle={`${allJudges.length} judge link${allJudges.length === 1 ? "" : "s"} · ${judgePanel.length} active (counted in the scores)${judgePanel.length < 3 && allJudges.length > 0 ? " — fewer than the usual 3" : ""}${judgePanel.length > 6 ? " — more than the usual 6" : ""}`}
           actions={
             <Button onClick={() => setAdding(true)}>
               <Plus className="size-4" /> Create judge link
             </Button>
           }
         />
-        {judgePanel.length === 0 ? (
+        {allJudges.length === 0 ? (
           <EmptyState title="No judges yet">Click “Create judge link”, enter the judge&apos;s name, then copy or WhatsApp the link to them.</EmptyState>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {judgePanel.map((m) => {
+            {allJudges.map((m) => {
               const done = round ? participants.filter((k) => finalScores[round]?.[m.id]?.[k]).length : 0;
               const pct = participants.length ? (done * 100) / participants.length : 0;
               return (

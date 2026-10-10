@@ -107,9 +107,11 @@ try {
   await no("config with a bad criterion max rejected", rest("PUT", "finalConfig/rounds/walk/criteria/c1/max", admin, 1000));
   await ok("admin selects finalists", rest("PUT", `finalists/${SK}`, admin, { studentId: "ZZ/1", name: "Rules Test", gender: "girl", number: 1, score3day: 80 }));
   await ok("admin selects a second finalist", rest("PUT", `finalists/${SK2}`, admin, { studentId: "ZZ/2", name: "Rules Test Two", gender: "boy", number: 2 }));
-  await ok("admin publishes the anonymous contestant entries", rest("PATCH", "contestants", admin, { n1: { number: 1, gender: "girl" }, n2: { number: 2, gender: "boy" } }));
-  await no("contestant with an invalid id rejected", rest("PUT", "contestants/zz", admin, { number: 9, gender: "girl" }));
-  await no("contestant with extra personal data rejected", rest("PUT", "contestants/n3", admin, { number: 3, gender: "girl", name: "Secret Name" }));
+  await ok("admin publishes the anonymous contestant entries", rest("PATCH", "contestants", admin, { n1: { number: 1, name: "Rules Test", gender: "girl" }, n2: { number: 2, name: "Rules Test Two", gender: "boy" } }));
+  await no("contestant with an invalid id rejected", rest("PUT", "contestants/zz", admin, { number: 9, name: "x", gender: "girl" }));
+  await no("contestant without a name rejected", rest("PUT", "contestants/n3", admin, { number: 3, gender: "girl" }));
+  await no("contestant with a student ID rejected", rest("PUT", "contestants/n3", admin, { number: 3, name: "x", gender: "girl", studentId: "BD/26/1" }));
+  await no("contestant with a class / photo rejected", rest("PUT", "contestants/n3", admin, { number: 3, name: "x", gender: "girl", class: "BD", photo: "http://x" }));
   await no("finalist with an invalid gender rejected", rest("PUT", "finalists/ZZBAD", admin, { studentId: "ZZ/9", name: "x", gender: "other", number: 3 }));
   await ok("admin creates judge 1", rest("PUT", "judges/zzj1", admin, { name: "ZZ Judge One", active: true, token: T1 }));
   await ok("admin creates judge 2", rest("PUT", "judges/zzj2", admin, { name: "ZZ Judge Two", active: true, token: T2 }));
@@ -167,12 +169,12 @@ try {
   await no("CANNOT read the finalists list (names / IDs / photos)", rest("GET", "finalists", j1.token));
   await no("cannot read a single finalist", rest("GET", `finalists/${SK}`, j1.token));
   await no("cannot read a finalist's name", rest("GET", `finalists/${SK}/name`, j1.token));
-  await ok("reads contestants (number + gender only)", rest("GET", "contestants", j1.token));
+  await ok("reads contestants (number + name + gender only)", rest("GET", "contestants", j1.token));
   {
     const body = await (await fetch(`${DB_URL}/contestants.json?auth=${j1.token}`)).text();
-    const leaked = /name|studentId|photo|class|programme|ZZ\//i.test(body);
-    if (leaked) fail++, console.log("  ✗ contestants data leaks personal details:", body.slice(0, 200));
-    else pass++, console.log("  ✓ contestants data contains no names, IDs, classes or photos");
+    const leaked = /studentId|photo|class|programme|ZZ\//i.test(body);
+    if (leaked) fail++, console.log("  ✗ contestants data leaks private details:", body.slice(0, 200));
+    else pass++, console.log("  ✓ contestants data contains only number, name and gender (no student ID, class or photo)");
   }
   await ok("reads own judge record", rest("GET", "judges/zzj1", j1.token));
   await no("cannot read another judge's record", rest("GET", "judges/zzj2", j1.token));

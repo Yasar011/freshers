@@ -288,3 +288,26 @@ describe("round elimination counts (10 + 10 finalists)", () => {
     expect(r.eliminated).toEqual([]);
   });
 });
+
+describe("judge panel (3–6 judges, only active links count)", () => {
+  it("a disabled judge is not part of the panel, so scores are out of the remaining judges", async () => {
+    const { judgePanel } = await import("@/lib/finals");
+    const four: Record<string, Judge> = {
+      a: { name: "A", active: true, token: "x" },
+      b: { name: "B", active: true, token: "x" },
+      c: { name: "C", active: true, token: "x" },
+      d: { name: "D", active: false, token: "x" }, // did not turn up
+    };
+    expect(judgePanel(four).map((m) => m.id)).toEqual(["a", "b", "c"]);
+    const finalists: Record<string, Finalist> = { F: fin(1, "girl") };
+    reg(finalists);
+    const scores: FinalScores = {};
+    for (const j of ["a", "b", "c"]) {
+      scores.walk ??= {};
+      scores.walk[j] = { n1: { scores: { c1: 10, c2: 10, c3: 10 }, timestamp: 1, judgeName: j } };
+    }
+    const [s] = computeStandings(finalists, four, scores, config);
+    expect(s.rounds.walk.required).toBe(3);
+    expect(s.rounds.walk.score100).toBe(100); // 90 / (3 × 30)
+  });
+});

@@ -38,7 +38,7 @@ export default function RoundsTab() {
 
   return (
     <div className="space-y-4">
-      {judgePanel.length === 0 && <Alert tone="amber">No judges yet — create judge links in the Judges tab before opening a round.</Alert>}
+      {judgePanel.length === 0 && <Alert tone="amber">No active judges yet — create judge links (3 to 6) in the Judges tab before opening a round.</Alert>}
       {Object.keys(finalists).length === 0 && <Alert tone="blue">No finalists yet — select them in the Finalists tab.</Alert>}
       {rounds.map(({ key, info }) => {
         const part = Object.entries(finalists).filter(([, f]) => takesPart(f, key));

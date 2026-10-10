@@ -65,12 +65,13 @@ export interface FinalScoreCorrection {
 }
 
 /**
- * What a judge is allowed to know about a contestant: only the number and gender.
- * Stored at /contestants/{cid} (judge-readable). Names, IDs, classes and photos live only in
+ * What a judge is allowed to know about a contestant: the number, the name and the gender grouping.
+ * Stored at /contestants/{cid} (judge-readable). Student IDs, classes/departments and photos live only in
  * /finalists (admin-only), so they never reach a judge's browser.
  */
 export interface Contestant {
   number: number;
+  name: string;
   gender: Gender;
   qualified?: Partial<Record<RoundKey, boolean>>;
 }
@@ -79,7 +80,7 @@ export interface Contestant {
 export const cidOf = (f: { number: number }) => `n${f.number}`;
 
 export function contestantRecord(f: Finalist): Contestant {
-  const c: Contestant = { number: f.number, gender: f.gender };
+  const c: Contestant = { number: f.number, name: f.name, gender: f.gender };
   if (f.qualified && Object.values(f.qualified).some(Boolean)) c.qualified = f.qualified;
   return c;
 }
@@ -161,10 +162,19 @@ export interface JudgePanelMember {
   judge: Judge;
 }
 
-export function judgePanel(judges: Record<string, Judge> | null | undefined): JudgePanelMember[] {
+/** Every judge link, active or not (for the Judges list). */
+export function allJudges(judges: Record<string, Judge> | null | undefined): JudgePanelMember[] {
   return Object.entries(judges ?? {})
     .map(([id, judge]) => ({ id, judge }))
     .sort((a, b) => a.judge.name.localeCompare(b.judge.name) || a.id.localeCompare(b.id));
+}
+
+/**
+ * The judging panel = judges whose link is ACTIVE (3–6 judges). Scores are calculated out of this panel, so
+ * disabling the link of a judge who doesn't turn up means everyone is scored out of the judges who did.
+ */
+export function judgePanel(judges: Record<string, Judge> | null | undefined): JudgePanelMember[] {
+  return allJudges(judges).filter((m) => m.judge.active);
 }
 
 export interface FinalistRoundResult {

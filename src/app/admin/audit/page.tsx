@@ -33,6 +33,7 @@ const ACTION_LABELS: Record<string, [string, "slate" | "green" | "amber" | "red"
   finals_initialized: ["Finals set up", "green"],
   finalist_selected: ["Finalist selected", "violet"],
   finalist_removed: ["Finalist removed", "red"],
+  finalist_renumbered: ["Contestant number changed", "violet"],
   finalists_auto_picked: ["Finalists auto-picked", "violet"],
   round_qualifiers_set: ["Qualifiers set", "violet"],
   round_opened: ["Final round opened", "green"],

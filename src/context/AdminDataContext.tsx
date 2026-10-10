@@ -6,7 +6,7 @@ import { dayKeys } from "@/lib/keys";
 import { panelOf, perEvaluatorMax, type PanelMember } from "@/lib/scoring";
 import type { EventInfo, Evaluator, EvaluationsTree, Settings, Student } from "@/lib/types";
 import type { AdminIdentity } from "@/lib/actions";
-import { cidOf, contestantRecord, judgePanel, type Contestant, type FinalConfig, type FinalScores, type Finalist, type Judge, type JudgePanelMember } from "@/lib/finals";
+import { allJudges, cidOf, contestantRecord, judgePanel, type Contestant, type FinalConfig, type FinalScores, type Finalist, type Judge, type JudgePanelMember } from "@/lib/finals";
 
 interface AdminData {
   admin: AdminIdentity;
@@ -21,7 +21,10 @@ interface AdminData {
   finalConfig: FinalConfig | null;
   finalists: Record<string, Finalist>;
   judges: Record<string, Judge>;
+  /** Judges whose link is active — the panel scores are calculated from. */
   judgePanel: JudgePanelMember[];
+  /** Every judge link, including disabled ones. */
+  allJudges: JudgePanelMember[];
   finalScores: FinalScores;
   panel: PanelMember[];
   maxPerEvaluator: number;
@@ -34,7 +37,7 @@ const Ctx = createContext<AdminData | null>(null);
 
 /** Field-wise comparison (Firebase returns keys in a different order, so never compare JSON strings). */
 function sameContestant(a: Contestant, b: Contestant | undefined): boolean {
-  return !!b && a.number === b.number && a.gender === b.gender && (["talent", "qa"] as const).every((r) => !!a.qualified?.[r] === !!b.qualified?.[r]);
+  return !!b && a.number === b.number && a.name === b.name && a.gender === b.gender && (["talent", "qa"] as const).every((r) => !!a.qualified?.[r] === !!b.qualified?.[r]);
 }
 
 /** Live (realtime) subscription to everything the admin dashboard needs. */
@@ -94,6 +97,7 @@ export function AdminDataProvider({ admin, children }: { admin: AdminIdentity; c
       finalists: finalists ?? {},
       judges: judges ?? {},
       judgePanel: judgePanel(judges),
+      allJudges: allJudges(judges),
       finalScores: finalScores ?? {},
       panel: panelOf(evaluators),
       maxPerEvaluator: perEvaluatorMax(settings),

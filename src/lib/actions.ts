@@ -155,6 +155,7 @@ export async function saveStudent(admin: AdminIdentity, student: Student, existi
     const fin = await get(ref(db(), `finalists/${key}`));
     if (fin.exists()) {
       updates[`finalists/${key}/name`] = student.name;
+      updates[`contestants/n${fin.val().number}/name`] = student.name;
       if (student.gender) {
         updates[`finalists/${key}/gender`] = student.gender;
         updates[`contestants/n${fin.val().number}/gender`] = student.gender;

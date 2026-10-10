@@ -1,13 +1,13 @@
 "use client";
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Sparkles, Trash2, UserPlus } from "lucide-react";
+import { Check, Pencil, Search, Sparkles, Trash2, UserPlus, X } from "lucide-react";
 import { Alert, Badge, Button, Card, CardHeader, ConfirmDialog, EmptyState, Input, Modal } from "@/components/ui";
 import { StudentAvatar } from "@/components/shared";
 import { useToast } from "@/components/ui/Toast";
 import { FinalistToggle, GenderBadge, GenderFilter, matchesGender, useFinals, useThreeDayScores, type GenderFilterValue } from "./common";
 import { autoPickFinalists, ROUND_KEYS, takesPart } from "@/lib/finals";
-import { removeFinalist, replaceFinalists, setPerGender } from "@/lib/finalsActions";
+import { removeFinalist, renumberFinalist, replaceFinalists, setPerGender } from "@/lib/finalsActions";
 import { compactId, normalizeStudentId } from "@/lib/keys";
 import { fmt } from "@/lib/scoring";
 import { errorMessage } from "@/lib/firebase";
@@ -94,7 +94,7 @@ export default function FinalistsTab() {
             <table className="w-full text-sm">
               <thead className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr className="border-b border-slate-100">
-                  <th className="px-5 py-2.5">#</th>
+                  <th className="px-5 py-2.5" title="Click a number to change it">#</th>
                   <th className="px-3 py-2.5">Finalist</th>
                   <th className="px-3 py-2.5">Gender</th>
                   <th className="px-3 py-2.5 text-right">3-day score</th>
@@ -105,7 +105,9 @@ export default function FinalistsTab() {
               <tbody className="divide-y divide-slate-100">
                 {shown.map(({ key, f }) => (
                   <tr key={key} className="hover:bg-slate-50">
-                    <td className="tabular px-5 py-2.5 text-base font-extrabold text-slate-400">{String(f.number).padStart(2, "0")}</td>
+                    <td className="px-5 py-2.5">
+                      <NumberCell finalistKey={key} number={f.number} />
+                    </td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-3">
                         <StudentAvatar student={f} size={36} />
@@ -281,5 +283,68 @@ function AddFinalistModal({ onClose }: { onClose: () => void }) {
         </ul>
       </div>
     </Modal>
+  );
+}
+
+/** Click the contestant number to change it (typing a number that is already taken swaps the two). */
+function NumberCell({ finalistKey, number }: { finalistKey: string; number: number }) {
+  const { finalists, finalScores, admin } = useFinals();
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(number));
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    const n = Number(value);
+    if (n === number) return setEditing(false);
+    setBusy(true);
+    try {
+      await renumberFinalist(admin, finalistKey, n, finalists, finalScores);
+      toast(`Contestant number changed to #${n}`, "success");
+      setEditing(false);
+    } catch (e) {
+      toast(errorMessage(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => {
+          setValue(String(number));
+          setEditing(true);
+        }}
+        className="group tabular flex items-center gap-1.5 rounded-lg px-2 py-1 text-base font-extrabold text-slate-500 hover:bg-slate-100"
+        title="Click to change this contestant's number"
+      >
+        {String(number).padStart(2, "0")}
+        <Pencil className="size-3.5 text-slate-300 group-hover:text-slate-500" />
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        type="number"
+        min={1}
+        max={999}
+        value={value}
+        autoFocus
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="h-9 w-20 tabular font-bold"
+      />
+      <Button size="sm" variant="success" onClick={save} loading={busy} aria-label="Save number">
+        <Check className="size-4" />
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={busy} aria-label="Cancel">
+        <X className="size-4" />
+      </Button>
+    </div>
   );
 }

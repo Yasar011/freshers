@@ -2,12 +2,12 @@
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { signInAnonymously, signOut } from "firebase/auth";
 import { get, onValue, ref, serverTimestamp, set } from "firebase/database";
-import { CheckCircle2, ChevronRight, Lock, ShieldAlert, X } from "lucide-react";
+import { CheckCircle2, Lock, ShieldAlert, X } from "lucide-react";
 import { auth, db, errorMessage } from "@/lib/firebase";
 import { useConnection } from "@/hooks/useConnection";
 import { submitFinalScore } from "@/lib/finalsActions";
 import { GENDERS, judgeTotal, roundMax, takesPart, type Contestant, type FinalConfig, type FinalScore, type Gender, type Judge, type RoundKey } from "@/lib/finals";
-import { Alert, Button, FullPageSpinner, ProgressBar, cn } from "@/components/ui";
+import { Alert, Button, FullPageSpinner, cn } from "@/components/ui";
 import { ConnectionBadge, OfflineBanner, ScoreSelector, formatTime } from "@/components/shared";
 
 type Gate =
@@ -42,9 +42,7 @@ function Message({ title, children, action }: { title: string; children: React.R
   );
 }
 
-const genderWord = (g: Gender) => (g === "boy" ? "Boy" : "Girl");
-
-/** Big number badge — judges only ever see the contestant number, never a name or photo. */
+/** Big number badge — judges see the contestant number and name only (no ID, class, photo or gender label). */
 function NumberBadge({ number, gender, size = 64 }: { number: number; gender: Gender; size?: number }) {
   return (
     <div
@@ -202,17 +200,9 @@ function JudgeConsole({ judgeId }: { judgeId: string }) {
         </div>
         {roundInfo?.note && <p className="mt-2 rounded-lg bg-white/10 px-3 py-1.5 text-xs text-brand-100">{roundInfo.note}</p>}
         {inRound.length > 0 && (
-          <div className="mt-3">
-            <div className="mb-1 flex justify-between text-xs font-medium text-brand-100">
-              <span>Scored</span>
-              <span className="tabular">
-                {done} / {inRound.length}
-              </span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-white/15">
-              <div className="h-full rounded-full bg-emerald-400 transition-[width]" style={{ width: `${(done * 100) / inRound.length}%` }} />
-            </div>
-          </div>
+          <p className="tabular mt-3 text-sm font-semibold text-brand-100">
+            Scored {done} / {inRound.length}
+          </p>
         )}
       </header>
 
@@ -252,24 +242,17 @@ function JudgeConsole({ judgeId }: { judgeId: string }) {
             <button
               key={cid}
               onClick={() => setOpen(cid)}
-              className="flex w-full items-center gap-4 rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-200 active:bg-slate-50"
+              className={cn("flex w-full items-center gap-4 rounded-2xl p-3 text-left shadow-sm ring-1 active:scale-[0.99]", sc ? "bg-emerald-50 ring-emerald-200" : "bg-white ring-slate-200")}
             >
               <NumberBadge number={c.number} gender={c.gender} />
-              <div className="min-w-0 flex-1">
-                <p className="text-lg font-bold text-slate-900">Contestant {c.number}</p>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{genderWord(c.gender)}</p>
-              </div>
+              <p className="min-w-0 flex-1 text-lg font-bold leading-snug text-slate-900">{c.name}</p>
               {sc ? (
-                <span className="tabular flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-sm font-bold text-emerald-700">
+                <span className="tabular flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-sm font-bold text-emerald-700">
                   <CheckCircle2 className="size-4" /> {judgeTotal(sc)}/{max}
                 </span>
               ) : isOpen ? (
-                <span className="flex items-center gap-0.5 text-sm font-semibold text-brand-600">
-                  Score <ChevronRight className="size-5" />
-                </span>
-              ) : (
-                <span className="text-xs text-slate-400">—</span>
-              )}
+                <span className="text-sm font-semibold text-brand-600">Score ›</span>
+              ) : null}
             </button>
           );
         })}
@@ -325,7 +308,7 @@ function ScoreSheet({
   const max = roundMax(info);
   const total = crit.reduce((s, [k]) => s + (scores[k] ?? 0), 0);
   const complete = crit.every(([k]) => scores[k] !== null);
-  const label = `Contestant ${contestant.number}`;
+  const label = contestant.name;
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -355,9 +338,7 @@ function ScoreSheet({
         <NumberBadge number={contestant.number} gender={contestant.gender} size={52} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-lg font-extrabold leading-tight">{label}</p>
-          <p className="text-xs text-slate-500">
-            {genderWord(contestant.gender)} · {info.label}
-          </p>
+          <p className="text-xs text-slate-500">{info.label}</p>
         </div>
         <button onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close">
           <X className="size-6" />
@@ -427,7 +408,6 @@ function ScoreSheet({
                 <Button size="xl" variant="success" className="w-full" disabled={!complete || !isOpen} onClick={() => setConfirm(true)}>
                   {complete ? "SUBMIT SCORE" : `Select all ${crit.length} scores`}
                 </Button>
-                <ProgressBar value={(crit.filter(([k]) => scores[k] !== null).length * 100) / crit.length} className="mt-2 h-1" />
               </>
             )}
           </div>
