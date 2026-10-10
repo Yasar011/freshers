@@ -139,7 +139,7 @@ describe("finals scoring", () => {
     expect(computeWinners(st, "boy").tie).toBe(true);
   });
 
-  it("recommends the top 3 boys and top 3 girls to advance", () => {
+  it("eliminates the 3 lowest boys and 3 lowest girls (6 → 3 each go through)", () => {
     const finalists: Record<string, Finalist> = reg({});
     const scores: FinalScores = {};
     for (let i = 1; i <= 6; i++) {
@@ -156,6 +156,9 @@ describe("finals scoring", () => {
     expect(boys.tieAtCut).toBe(false);
     expect(girls.tieAtCut).toBe(false);
     expect(boys.wanted).toBe(3);
+    expect(boys.eliminate).toBe(3);
+    expect(boys.eliminated).toEqual(["B3", "B2", "B1"]);
+    expect(girls.eliminated).toEqual(["G3", "G2", "G1"]);
   });
 
   it("flags a tie at the cut when the 3rd and 4th are level", () => {
@@ -167,8 +170,11 @@ describe("finals scoring", () => {
     });
     const scores: FinalScores = {};
     for (const k of Object.keys(finalists)) addScore(scores, "walk", k, 7);
-    const rec = recommendAdvance("walk", finalists, judges, scores, config).find((r) => r.gender === "boy")!;
+    const cfg = defaultFinalConfig();
+    cfg.rounds.walk.eliminateBoys = 1;
+    const rec = recommendAdvance("walk", finalists, judges, scores, cfg).find((r) => r.gender === "boy")!;
     expect(rec.picks).toHaveLength(3);
+    expect(rec.eliminated).toHaveLength(1);
     expect(rec.tieAtCut).toBe(true);
   });
 
@@ -251,5 +257,34 @@ describe("finals export", () => {
     const status = Object.fromEntries(sheet.rows.slice(1).map((r) => [r[4], r[r.length - 1]]));
     expect(status).toEqual({ N1: "WINNER", N2: "RUNNER-UP", N3: "Out after Fashion Walk" });
     expect(sheet.rows[0]).toContain("Final /100");
+  });
+});
+
+describe("round elimination counts (10 + 10 finalists)", () => {
+  it("10 boys → 7 after the first round → 4 after the second", () => {
+    const finalists: Record<string, Finalist> = {};
+    const scores: FinalScores = {};
+    for (let i = 1; i <= 10; i++) finalists["B" + i] = fin(i, "boy", { score3day: 50 + i });
+    reg(finalists);
+    for (let i = 1; i <= 10; i++) addScore(scores, "walk", "B" + i, i * 0.9); // B10 best … B1 worst
+    const r1 = recommendAdvance("walk", finalists, judges, scores, config).find((r) => r.gender === "boy")!;
+    expect(r1.candidates).toBe(10);
+    expect(r1.wanted).toBe(7);
+    expect([...r1.eliminated].sort()).toEqual(["B1", "B2", "B3"]);
+    for (const k of r1.picks) finalists[k] = { ...finalists[k], qualified: { talent: true } };
+    for (const k of r1.picks) addScore(scores, "talent", k, Number(k.slice(1)) * 0.9);
+    const r2 = recommendAdvance("talent", finalists, judges, scores, config).find((r) => r.gender === "boy")!;
+    expect(r2.candidates).toBe(7);
+    expect(r2.wanted).toBe(4);
+    expect([...r2.eliminated].sort()).toEqual(["B4", "B5", "B6"]);
+    expect(r2.picks).toEqual(["B10", "B9", "B8", "B7"]);
+  });
+
+  it("never eliminates everyone when there are very few contestants", () => {
+    const finalists: Record<string, Finalist> = { A: fin(1, "girl") };
+    reg(finalists);
+    const r = recommendAdvance("walk", finalists, {}, {}, config).find((x) => x.gender === "girl")!;
+    expect(r.wanted).toBe(1);
+    expect(r.eliminated).toEqual([]);
   });
 });

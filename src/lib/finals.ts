@@ -18,9 +18,9 @@ export interface FinalRound {
   status: "open" | "locked";
   /** Weight of this round in the combined final score. */
   weight: number;
-  /** How many boys / girls advance to the next round from this round (walk, talent). */
-  advanceBoys?: number;
-  advanceGirls?: number;
+  /** How many boys / girls with the LOWEST scores are eliminated after this round (walk, talent). */
+  eliminateBoys?: number;
+  eliminateGirls?: number;
   note?: string;
   openedAt?: number;
   lockedAt?: number;
@@ -108,8 +108,8 @@ export function defaultFinalConfig(): FinalConfig {
         order: 1,
         status: "locked",
         weight: 1,
-        advanceBoys: 3,
-        advanceGirls: 3,
+        eliminateBoys: 3,
+        eliminateGirls: 3,
         note: "Walk on stage",
         criteria: {
           c1: c("Confidence & Walk", 1),
@@ -122,8 +122,8 @@ export function defaultFinalConfig(): FinalConfig {
         order: 2,
         status: "locked",
         weight: 1,
-        advanceBoys: 3,
-        advanceGirls: 3,
+        eliminateBoys: 3,
+        eliminateGirls: 3,
         note: "Keep audios ready, if any",
         criteria: {
           c1: c("Creativity & Talent", 1),
@@ -298,18 +298,24 @@ export function computeWinners(standings: FinalStanding[], gender: Gender): Winn
 
 export interface AdvanceRecommendation {
   gender: Gender;
-  /** Student keys recommended to advance, best first. */
+  /** Student keys recommended to go through, best first. */
   picks: string[];
+  /** Student keys recommended to be eliminated (the lowest scorers), worst last. */
+  eliminated: string[];
+  /** How many go through = candidates − eliminations (at least 1). */
   wanted: number;
-  /** The last place is level with the first one left out — the admin must decide. */
+  /** How many are to be eliminated (from the settings). */
+  eliminate: number;
+  /** The last one going through is level with the first one eliminated — the admin must decide. */
   tieAtCut: boolean;
   /** How many contestants of this gender are in the round. */
   candidates: number;
 }
 
 /**
- * Who should advance after `round` (walk → talent, talent → qa)? Top N boys and top N girls by the
- * cumulative score so far (walk; or walk + talent), ties broken by the 3-day score.
+ * Who goes through after `round` (walk → talent, talent → qa)? In each gender the N lowest scorers
+ * (default 3 boys + 3 girls) are eliminated; the rest go through. Ranked by the cumulative score so far
+ * (walk; or walk + talent), ties broken by the 3-day score.
  */
 export function recommendAdvance(
   round: "walk" | "talent",
@@ -323,16 +329,26 @@ export function recommendAdvance(
   const panel = judgePanel(judges);
   const cumulative = (s: FinalStanding) => weighted(config, Object.fromEntries(rounds.map((r) => [r, roundResult(cidOf(s.finalist), r, panel, scores, config).score100])), rounds);
   return GENDERS.map((gender) => {
-    const wanted = Number(gender === "boy" ? config?.rounds?.[round]?.advanceBoys : config?.rounds?.[round]?.advanceGirls) || 0;
+    const eliminate = Math.max(0, Number(gender === "boy" ? config?.rounds?.[round]?.eliminateBoys : config?.rounds?.[round]?.eliminateGirls) || 0);
     const group = standings
       .filter((s) => s.finalist.gender === gender)
       .map((s) => ({ s, score: cumulative(s) }))
       .sort((a, b) => b.score - a.score || (b.s.finalist.score3day ?? 0) - (a.s.finalist.score3day ?? 0) || a.s.finalist.number - b.s.finalist.number);
+    // Never eliminate everybody: with very few contestants at least one goes through.
+    const wanted = group.length === 0 ? 0 : Math.max(1, group.length - eliminate);
     const cutScore = group[wanted - 1];
     const next = group[wanted];
     const tieAtCut =
       !!cutScore && !!next && cutScore.score === next.score && (cutScore.s.finalist.score3day ?? 0) === (next.s.finalist.score3day ?? 0);
-    return { gender, picks: group.slice(0, wanted).map((x) => x.s.key), wanted, tieAtCut, candidates: group.length };
+    return {
+      gender,
+      picks: group.slice(0, wanted).map((x) => x.s.key),
+      eliminated: group.slice(wanted).map((x) => x.s.key),
+      wanted,
+      eliminate,
+      tieAtCut,
+      candidates: group.length,
+    };
   });
 }
 

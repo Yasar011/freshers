@@ -265,8 +265,8 @@ export interface RoundSettings {
   label: string;
   note: string;
   weight: number;
-  advanceBoys?: number;
-  advanceGirls?: number;
+  eliminateBoys?: number;
+  eliminateGirls?: number;
   criteria: Record<string, FinalCriterion>;
 }
 
@@ -277,8 +277,8 @@ export async function saveRoundSettings(admin: AdminIdentity, round: RoundKey, s
     [`finalConfig/rounds/${round}/weight`]: s.weight,
     [`finalConfig/rounds/${round}/criteria`]: s.criteria,
   };
-  if (s.advanceBoys !== undefined) updates[`finalConfig/rounds/${round}/advanceBoys`] = s.advanceBoys;
-  if (s.advanceGirls !== undefined) updates[`finalConfig/rounds/${round}/advanceGirls`] = s.advanceGirls;
+  if (s.eliminateBoys !== undefined) updates[`finalConfig/rounds/${round}/eliminateBoys`] = s.eliminateBoys;
+  if (s.eliminateGirls !== undefined) updates[`finalConfig/rounds/${round}/eliminateGirls`] = s.eliminateGirls;
   if (perGender !== undefined) updates["finalConfig/perGender"] = perGender;
   const crit = Object.values(s.criteria).sort((a, b) => a.order - b.order).map((c) => `${c.label} /${c.max}`).join(", ");
   await update(

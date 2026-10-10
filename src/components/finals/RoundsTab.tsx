@@ -81,7 +81,7 @@ export default function RoundsTab() {
                 </Button>
                 {(key === "walk" || key === "talent") && (
                   <Button variant="secondary" size="sm" onClick={() => setQualifiers(key)}>
-                    <Users className="size-4" /> Pick {info.advanceBoys ?? 3} boys + {info.advanceGirls ?? 3} girls for {finalConfig.rounds[ROUND_KEYS[idx + 1]].label}
+                    <Users className="size-4" /> Eliminate lowest {info.eliminateBoys ?? 3} boys + {info.eliminateGirls ?? 3} girls → {finalConfig.rounds[ROUND_KEYS[idx + 1]].label}
                   </Button>
                 )}
                 {isOpen ? (
@@ -98,7 +98,7 @@ export default function RoundsTab() {
             <div className="flex flex-wrap items-center gap-4 px-5 py-3 text-sm">
               <span className="text-slate-600">
                 <b className="tabular">{qualifiedCount}</b> contestant{qualifiedCount === 1 ? "" : "s"}
-                {prev && qualifiedCount === 0 && <span className="text-amber-600"> — pick qualifiers after {finalConfig.rounds[prev].label}</span>}
+                {prev && qualifiedCount === 0 && <span className="text-amber-600"> — run the eliminations after {finalConfig.rounds[prev].label}</span>}
               </span>
               <div className="flex min-w-48 flex-1 items-center gap-2">
                 <ProgressBar value={pct} />
@@ -347,7 +347,7 @@ function FinalScoreModal({ round, studentKey, member, onClose }: { round: RoundK
   );
 }
 
-// ───────────────────────── Qualifiers (3 boys + 3 girls) ─────────────────────────
+// ───────────────────────── Eliminations (lowest 3 boys + 3 girls out) ─────────────────────────
 
 function QualifiersModal({ from, onClose }: { from: "walk" | "talent"; onClose: () => void }) {
   const { finalists, judges, finalScores, finalConfig, admin } = useFinals();
@@ -382,7 +382,7 @@ function QualifiersModal({ from, onClose }: { from: "walk" | "talent"; onClose: 
       open
       onClose={() => !busy && onClose()}
       size="xl"
-      title={`Selected for ${finalConfig.rounds[next].label}`}
+      title={`After ${finalConfig.rounds[from].label}: who goes through to ${finalConfig.rounds[next].label}`}
       footer={
         <>
           <Button variant="ghost" className="mr-auto" onClick={() => setSelected(new Set(rec.flatMap((r) => r.picks))) }>
@@ -399,8 +399,8 @@ function QualifiersModal({ from, onClose }: { from: "walk" | "talent"; onClose: 
     >
       <div className="space-y-4">
         <p className="text-sm text-slate-600">
-          Recommended: the top {finalConfig.rounds[from].advanceBoys ?? 3} boys and top {finalConfig.rounds[from].advanceGirls ?? 3} girls by{" "}
-          {from === "walk" ? finalConfig.rounds.walk.label : "Walk + Talent"} score (ties broken by the 3-day score). Tick or untick to change the list.
+          The <b>{finalConfig.rounds[from].eliminateBoys ?? 3} lowest-scoring boys</b> and <b>{finalConfig.rounds[from].eliminateGirls ?? 3} lowest-scoring girls</b> are eliminated, based on{" "}
+          {from === "walk" ? finalConfig.rounds.walk.label : "Walk + Talent"} scores (ties broken by the 3-day score). Tick = goes through, untick = out. You can change anyone by hand.
         </p>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {rec.map((r) => {
@@ -412,10 +412,10 @@ function QualifiersModal({ from, onClose }: { from: "walk" | "talent"; onClose: 
                 <div className="mb-2 flex items-center justify-between">
                   <h4 className="font-bold">{r.gender === "boy" ? "Boys" : "Girls"}</h4>
                   <Badge tone={[...selected].filter((k) => finalists[k]?.gender === r.gender).length === r.wanted ? "green" : "amber"}>
-                    {[...selected].filter((k) => finalists[k]?.gender === r.gender).length} / {r.wanted}
+                    {[...selected].filter((k) => finalists[k]?.gender === r.gender).length} through · {group.length - [...selected].filter((k) => finalists[k]?.gender === r.gender).length} out
                   </Badge>
                 </div>
-                {r.tieAtCut && <Alert className="mb-2">The last place is tied with the next contestant — you decide who goes through.</Alert>}
+                {r.tieAtCut && <Alert className="mb-2">The last one going through is tied with the first one out — you decide who stays.</Alert>}
                 <ul className="divide-y divide-slate-100 rounded-xl ring-1 ring-slate-200">
                   {sorted.map(([k, f], i) => (
                     <li key={k}>
@@ -427,7 +427,7 @@ function QualifiersModal({ from, onClose }: { from: "walk" | "talent"; onClose: 
                           <b>{f.name}</b> <span className="text-xs text-slate-500">#{f.number}</span>
                         </span>
                         <span className="tabular font-semibold">{fmt(panel.get(k) ?? 0)}</span>
-                        {r.picks.includes(k) && <Badge tone="violet">recommended</Badge>}
+                        {selected.has(k) ? <Badge tone="green">through</Badge> : <Badge tone="red">out</Badge>}
                       </label>
                     </li>
                   ))}
@@ -477,8 +477,8 @@ function RoundSettingsModal({ round, onClose }: { round: RoundKey; onClose: () =
   const [label, setLabel] = useState(info.label);
   const [note, setNote] = useState(info.note ?? "");
   const [weight, setWeight] = useState(String(info.weight));
-  const [advB, setAdvB] = useState(String(info.advanceBoys ?? 3));
-  const [advG, setAdvG] = useState(String(info.advanceGirls ?? 3));
+  const [advB, setAdvB] = useState(String(info.eliminateBoys ?? 3));
+  const [advG, setAdvG] = useState(String(info.eliminateGirls ?? 3));
   const [crit, setCrit] = useState<[string, FinalCriterion][]>(Object.entries(info.criteria).sort((a, b) => a[1].order - b[1].order));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -496,15 +496,15 @@ function RoundSettingsModal({ round, onClose }: { round: RoundKey; onClose: () =
     }
     const ab = Number(advB);
     const ag = Number(advG);
-    if (hasAdvance && (!Number.isInteger(ab) || !Number.isInteger(ag) || ab < 0 || ag < 0)) return setError("Advance counts must be whole numbers.");
+    if (hasAdvance && (!Number.isInteger(ab) || !Number.isInteger(ag) || ab < 0 || ag < 0)) return setError("Elimination counts must be whole numbers.");
     setBusy(true);
     try {
       await saveRoundSettings(admin, round, {
         label,
         note,
         weight: w,
-        advanceBoys: hasAdvance ? ab : undefined,
-        advanceGirls: hasAdvance ? ag : undefined,
+        eliminateBoys: hasAdvance ? ab : undefined,
+        eliminateGirls: hasAdvance ? ag : undefined,
         criteria: Object.fromEntries(crit.map(([, c], i) => [`c${i + 1}`, { label: c.label.trim(), max: c.max, order: i + 1 }])),
       });
       toast("Round settings saved", "success");
@@ -545,8 +545,8 @@ function RoundSettingsModal({ round, onClose }: { round: RoundKey; onClose: () =
         <Field label="Note shown to judges">{(id) => <Input id={id} value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} />}</Field>
         {hasAdvance && (
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Boys advancing to the next round">{(id) => <Input id={id} type="number" min={0} value={advB} onChange={(e) => setAdvB(e.target.value)} />}</Field>
-            <Field label="Girls advancing to the next round">{(id) => <Input id={id} type="number" min={0} value={advG} onChange={(e) => setAdvG(e.target.value)} />}</Field>
+            <Field label="Boys eliminated after this round (lowest scores)">{(id) => <Input id={id} type="number" min={0} value={advB} onChange={(e) => setAdvB(e.target.value)} />}</Field>
+            <Field label="Girls eliminated after this round (lowest scores)">{(id) => <Input id={id} type="number" min={0} value={advG} onChange={(e) => setAdvG(e.target.value)} />}</Field>
           </div>
         )}
         <div>

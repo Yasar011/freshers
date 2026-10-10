@@ -318,12 +318,6 @@
           "weight": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
           },
-          "advanceBoys": {
-            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 50"
-          },
-          "advanceGirls": {
-            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 50"
-          },
           "note": {
             ".validate": "newData.isString() && newData.val().length <= 200"
           },
@@ -349,6 +343,12 @@
                 ".validate": false
               }
             }
+          },
+          "eliminateBoys": {
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 50"
+          },
+          "eliminateGirls": {
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 50"
           },
           "$other": {
             ".validate": false

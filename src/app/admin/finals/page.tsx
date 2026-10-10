@@ -36,7 +36,7 @@ export default function FinalsPage() {
           </div>
           <h2 className="mt-4 text-xl font-bold">Set up the Finals</h2>
           <p className="mt-2 text-sm text-slate-600">
-            Creates the three final rounds — Fashion Walk, Talent Round and Question &amp; Answer — with their judging criteria (each /10). Judges score on their phones through personal links, and the top 3 boys and top 3 girls advance in each round. You can edit everything afterwards.
+            Creates the three final rounds — Fashion Walk, Talent Round and Question &amp; Answer — with their judging criteria (each /10). Judges score on their phones through personal links. In Fashion Walk and Talent Round the 3 lowest-scoring boys and 3 lowest-scoring girls are eliminated (10 → 7 → 4 of each). You can edit everything afterwards.
           </p>
           <Button
             size="lg"
